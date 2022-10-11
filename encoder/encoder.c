@@ -3479,7 +3479,7 @@ int     x264_encoder_encode( x264_t *h,
     x264_ratecontrol_zone_init( h );
 
     // ok to call this before encoding any frames, since the initial values of fdec have b_kept_as_ref=0
-    if( reference_update( h ) )
+    if( reference_update( h ) ) //更新参考帧列表
         return -1;
     h->fdec->i_lines_completed = -1;
 
@@ -3521,7 +3521,7 @@ int     x264_encoder_encode( x264_t *h,
         i_nal_type    = NAL_SLICE_IDR;
         i_nal_ref_idc = NAL_PRIORITY_HIGHEST;
         h->sh.i_type = SLICE_TYPE_I;
-        reference_reset( h );
+        reference_reset( h ); //如果为IDR帧，调用该函数清空参考帧列表。
         h->frames.i_poc_last_open_gop = -1;
     }
     else if( h->fenc->i_type == X264_TYPE_I )
@@ -3529,7 +3529,7 @@ int     x264_encoder_encode( x264_t *h,
         i_nal_type    = NAL_SLICE;
         i_nal_ref_idc = NAL_PRIORITY_HIGH; /* Not completely true but for now it is (as all I/P are kept as ref)*/
         h->sh.i_type = SLICE_TYPE_I;
-        reference_hierarchy_reset( h );
+        reference_hierarchy_reset( h ); //如果是I（非IDR帧）、P帧、B帧（可做为参考帧），调用该函数。
         if( h->param.b_open_gop )
             h->frames.i_poc_last_open_gop = h->fenc->b_keyframe ? h->fenc->i_poc : -1;
     }
@@ -3581,7 +3581,7 @@ int     x264_encoder_encode( x264_t *h,
 
     /* ------------------- Init                ----------------------------- */
     /* build ref list 0/1 */
-    reference_build_list( h, h->fdec->i_poc );
+    reference_build_list( h, h->fdec->i_poc ); //根据当前帧的poc 创建强项参考队列和后向参考队列
 
     /* ---------------------- Write the bitstream -------------------------- */
     /* Init bitstream context */

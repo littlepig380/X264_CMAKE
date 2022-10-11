@@ -1519,6 +1519,7 @@ void x264_slicetype_analyse( x264_t *h, int intra_minigop )
         return;
     }
 
+    //这里对frames中第一帧frames[1](frames[0]为lastnonb)做转场判断,如果判断为转场帧,该帧则会被设置成为I帧, 并把I帧作为一个单独的minigop输出出去, frames[1]成为下一个lastnonb
     if( IS_X264_TYPE_AUTO_OR_I( frames[1]->i_type ) &&
         h->param.i_scenecut_threshold && scenecut( h, &a, frames, 0, 1, 1, orig_num_frames, i_max_search ) )
     {

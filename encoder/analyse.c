@@ -670,7 +670,7 @@ static void mb_analyse_intra( x264_t *h, x264_mb_analysis_t *a, int i_satd_inter
     const unsigned int flags = h->sh.i_type == SLICE_TYPE_I ? h->param.analyse.intra : h->param.analyse.inter;
     pixel *p_src = h->mb.pic.p_fenc[0];
     pixel *p_dst = h->mb.pic.p_fdec[0];
-    static const int8_t intra_analysis_shortcut[2][2][2][5] =
+    static const int8_t intra_analysis_shortcut[2][2][2][5] = //预测模式组合,用于跳过一些预测模式
     {
         {{{I_PRED_4x4_HU, -1, -1, -1, -1},
           {I_PRED_4x4_DDL, I_PRED_4x4_VL, -1, -1, -1}},
@@ -689,13 +689,15 @@ static void mb_analyse_intra( x264_t *h, x264_mb_analysis_t *a, int i_satd_inter
     /* Disabled i16x16 for AVC-Intra compat */
     if( !h->param.i_avcintra_class )
     {
+        //检测当前宏块 那些预测模式是有效的
         const int8_t *predict_mode = predict_16x16_mode_available( h->mb.i_neighbour_intra );
 
-        /* Not heavily tuned */
+        /* Not heavily tuned */ //模式字占bits大小
         static const uint8_t i16x16_thresh_lut[11] = { 2, 2, 2, 3, 3, 4, 4, 4, 4, 4, 4 };
+        //fast intra, 提前结束的阈值, 如果fast intra,阈值就是和b_fast_intra, 反之就是最大COST
         int i16x16_thresh = a->b_fast_intra ? (i16x16_thresh_lut[h->mb.i_subpel_refine]*i_satd_inter)>>1 : COST_MAX;
 
-        if( !h->mb.b_lossless && predict_mode[3] >= 0 )
+        if( !h->mb.b_lossless && predict_mode[3] >= 0 ) //至少有4个模式是有效的, 16x16只有4种模式
         {
             h->pixf.intra_mbcmp_x3_16x16( p_src, p_dst, a->i_satd_i16x16_dir );
             a->i_satd_i16x16_dir[0] += lambda * bs_size_ue(0);
@@ -714,7 +716,7 @@ static void mb_analyse_intra( x264_t *h, x264_mb_analysis_t *a, int i_satd_inter
                 COPY2_IF_LT( a->i_satd_i16x16, a->i_satd_i16x16_dir[I_PRED_16x16_P], a->i_predict16x16, 3 );
             }
         }
-        else
+        else //如果不是都可以用, 那就逐个比较
         {
             for( ; *predict_mode >= 0; predict_mode++ )
             {
@@ -727,7 +729,7 @@ static void mb_analyse_intra( x264_t *h, x264_mb_analysis_t *a, int i_satd_inter
                     h->predict_16x16[i_mode]( p_dst );
 
                 i_satd = h->pixf.mbcmp[PIXEL_16x16]( p_src, FENC_STRIDE, p_dst, FDEC_STRIDE ) +
-                         lambda * bs_size_ue( x264_mb_pred_mode16x16_fix[i_mode] );
+                         lambda * bs_size_ue( x264_mb_pred_mode16x16_fix[i_mode] ); // 选择satd残差最小的作为最佳匹配结果
                 COPY2_IF_LT( a->i_satd_i16x16, i_satd, a->i_predict16x16, i_mode );
                 a->i_satd_i16x16_dir[i_mode] = i_satd;
             }
@@ -737,7 +739,7 @@ static void mb_analyse_intra( x264_t *h, x264_mb_analysis_t *a, int i_satd_inter
             /* cavlc mb type prefix */
             a->i_satd_i16x16 += lambda * i_mb_b_cost_table[I_16x16];
 
-        if( a->i_satd_i16x16 > i16x16_thresh )
+        if( a->i_satd_i16x16 > i16x16_thresh ) //如果比预设值还要大,那么帧内匹配就是失败了
             return;
     }
 
@@ -2936,7 +2938,7 @@ void x264_macroblock_analyse( x264_t *h )
 intra_analysis:
         if( analysis.i_mbrd )
             mb_init_fenc_cache( h, analysis.i_mbrd >= 2 );
-        mb_analyse_intra( h, &analysis, COST_MAX );
+        mb_analyse_intra( h, &analysis, COST_MAX ); // Intra宏块帧内预测模式分析。
         if( analysis.i_mbrd )
             intra_rd( h, &analysis, COST_MAX );
 

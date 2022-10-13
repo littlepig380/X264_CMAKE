@@ -2310,7 +2310,7 @@ static inline void reference_build_list( x264_t *h, int i_poc )
             h->fref[0][h->i_ref[0]++] = h->frames.reference[i];
         else if( h->frames.reference[i]->i_poc > i_poc )
             h->fref[1][h->i_ref[1]++] = h->frames.reference[i];
-    }
+    } //首先将依据poc大于还是小于当前帧分开两个队列
 
     if( h->sh.i_mmco_remove_from_end )
     {
@@ -2821,7 +2821,7 @@ static intptr_t slice_write( x264_t *h )
             if( !(i_mb_y & SLICE_MBAFF) && h->param.rc.i_vbv_buffer_size )
                 bitstream_backup( h, &bs_bak[BS_BAK_ROW_VBV], i_skip, 1 );
             if( !h->mb.b_reencode_mb )
-                fdec_filter_row( h, i_mb_y, 0 );
+                fdec_filter_row( h, i_mb_y, 0 ); //每处理一行宏块，调用一次 fdec_filter_row() 执行滤波模块。
         }
 
         if( back_up_bitstream )
@@ -2856,7 +2856,7 @@ static intptr_t slice_write( x264_t *h )
         if( SLICE_MBAFF )
             x264_macroblock_cache_load_interlaced( h, i_mb_x, i_mb_y );
         else
-            x264_macroblock_cache_load_progressive( h, i_mb_x, i_mb_y );
+            x264_macroblock_cache_load_progressive( h, i_mb_x, i_mb_y ); //将要编码的宏块的周围的宏块的信息读进来。
 
         x264_macroblock_analyse( h );
 
@@ -3452,7 +3452,7 @@ int     x264_encoder_encode( x264_t *h,
 
     /* ------------------- Get frame to be encoded ------------------------- */
     /* 4: get picture to encode */
-    h->fenc = x264_frame_shift( h->frames.current );
+    h->fenc = x264_frame_shift( h->frames.current ); //从current中取出一帧 准备编码
 
     /* If applicable, wait for previous frame reconstruction to finish */
     if( h->param.b_sliced_threads )
@@ -3479,7 +3479,7 @@ int     x264_encoder_encode( x264_t *h,
     x264_ratecontrol_zone_init( h );
 
     // ok to call this before encoding any frames, since the initial values of fdec have b_kept_as_ref=0
-    if( reference_update( h ) ) //更新参考帧列表
+    if( reference_update( h ) ) //更新参考帧队列
         return -1;
     h->fdec->i_lines_completed = -1;
 

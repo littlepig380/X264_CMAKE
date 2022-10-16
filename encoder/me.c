@@ -317,9 +317,10 @@ void x264_me_search_ref( x264_t *h, x264_me_t *m, int16_t (*mvc)[2], int i_mvc, 
             COST_MV( 0, 0 );
     }
 
+    //根据不同的算法进行搜索遍历找到真正的mv
     switch( h->mb.i_me_method )
     {
-        case X264_ME_DIA:
+        case X264_ME_DIA: //钻石搜索
         {
             /* diamond search, radius 1 */
             bcost <<= 4;

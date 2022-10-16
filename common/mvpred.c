@@ -125,15 +125,16 @@ median:
     else
         goto median;
 }
+        // x264_mb_predict_mv_16x16( h, 0, i_ref, m.mvp ); //获得预测的运动矢量MV（通过取中值）
 
 void x264_mb_predict_mv_16x16( x264_t *h, int i_list, int i_ref, int16_t mvp[2] )
 {
-    int     i_refa = h->mb.cache.ref[i_list][X264_SCAN8_0 - 1];
-    int16_t *mv_a  = h->mb.cache.mv[i_list][X264_SCAN8_0 - 1];
-    int     i_refb = h->mb.cache.ref[i_list][X264_SCAN8_0 - 8];
-    int16_t *mv_b  = h->mb.cache.mv[i_list][X264_SCAN8_0 - 8];
-    int     i_refc = h->mb.cache.ref[i_list][X264_SCAN8_0 - 8 + 4];
-    int16_t *mv_c  = h->mb.cache.mv[i_list][X264_SCAN8_0 - 8 + 4];
+    int     i_refa = h->mb.cache.ref[i_list][X264_SCAN8_0 - 1];//取当前宏块相邻的neigber A的引用的参考帧id (当前宏块左边)
+    int16_t *mv_a  = h->mb.cache.mv[i_list][X264_SCAN8_0 - 1]; //取当前宏块相邻的neigber A的向量
+    int     i_refb = h->mb.cache.ref[i_list][X264_SCAN8_0 - 8];//取当前宏块相邻的neigber B的引用的参考帧id (当前宏块正上方)
+    int16_t *mv_b  = h->mb.cache.mv[i_list][X264_SCAN8_0 - 8]; //取当前宏块相邻的neigber B的向量
+    int     i_refc = h->mb.cache.ref[i_list][X264_SCAN8_0 - 8 + 4];//取当前宏块相邻的neigber C的引用的参考帧id (当前宏块右上方)
+    int16_t *mv_c  = h->mb.cache.mv[i_list][X264_SCAN8_0 - 8 + 4]; //取当前宏块相邻的neigber C的向量
     if( i_refc == -2 )
     {
         i_refc = h->mb.cache.ref[i_list][X264_SCAN8_0 - 8 - 1];
@@ -142,12 +143,12 @@ void x264_mb_predict_mv_16x16( x264_t *h, int i_list, int i_ref, int16_t mvp[2] 
 
     int i_count = (i_refa == i_ref) + (i_refb == i_ref) + (i_refc == i_ref);
 
-    if( i_count > 1 )
+    if( i_count > 1 ) // 如果大于一个，则求中位数
     {
 median:
         x264_median_mv( mvp, mv_a, mv_b, mv_c );
     }
-    else if( i_count == 1 )
+    else if( i_count == 1 ) // 如果等于 1 ，则直接使用这个mv
     {
         if( i_refa == i_ref )
             CP32( mvp, mv_a );

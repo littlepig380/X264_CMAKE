@@ -129,26 +129,28 @@ median:
 
 void x264_mb_predict_mv_16x16( x264_t *h, int i_list, int i_ref, int16_t mvp[2] )
 {
+    // 这里需要详细了解X264_SCAN8_0这个宏块和对应编码需要的信息的存储结构,了解什么事cache友好的编码方式
     int     i_refa = h->mb.cache.ref[i_list][X264_SCAN8_0 - 1];//取当前宏块相邻的neigber A的引用的参考帧id (当前宏块左边)
     int16_t *mv_a  = h->mb.cache.mv[i_list][X264_SCAN8_0 - 1]; //取当前宏块相邻的neigber A的向量
     int     i_refb = h->mb.cache.ref[i_list][X264_SCAN8_0 - 8];//取当前宏块相邻的neigber B的引用的参考帧id (当前宏块正上方)
     int16_t *mv_b  = h->mb.cache.mv[i_list][X264_SCAN8_0 - 8]; //取当前宏块相邻的neigber B的向量
     int     i_refc = h->mb.cache.ref[i_list][X264_SCAN8_0 - 8 + 4];//取当前宏块相邻的neigber C的引用的参考帧id (当前宏块右上方)
     int16_t *mv_c  = h->mb.cache.mv[i_list][X264_SCAN8_0 - 8 + 4]; //取当前宏块相邻的neigber C的向量
-    if( i_refc == -2 )
+    if( i_refc == -2 ) //如果右上的块不行, neigber C就采用左上的块
     {
         i_refc = h->mb.cache.ref[i_list][X264_SCAN8_0 - 8 - 1];
         mv_c   = h->mb.cache.mv[i_list][X264_SCAN8_0 - 8 - 1];
     }
 
+    //!< 统计当前宏块所参考的参考帧序号与邻块所参考的参考帧序号相同数
     int i_count = (i_refa == i_ref) + (i_refb == i_ref) + (i_refc == i_ref);
 
-    if( i_count > 1 ) // 如果大于一个，则求中位数
+    if( i_count > 1 ) //!< 相同数大于1时，直接取这三个邻块的运动矢量的中值作为预测运动矢量
     {
 median:
         x264_median_mv( mvp, mv_a, mv_b, mv_c );
     }
-    else if( i_count == 1 ) // 如果等于 1 ，则直接使用这个mv
+    else if( i_count == 1 ) //!< 只有一个邻块与其相同时，预测运动矢量设置为该邻块的运动矢量
     {
         if( i_refa == i_ref )
             CP32( mvp, mv_a );
@@ -157,10 +159,11 @@ median:
         else
             CP32( mvp, mv_c );
     }
-    else if( i_refb == -2 && i_refc == -2 && i_refa != -2 )
+    //!< 没有邻块与其相同的两种情况
+    else if( i_refb == -2 && i_refc == -2 && i_refa != -2 ) //!< 只有a块是存在的，则预测运动矢量设置为该邻块的运动矢量
         CP32( mvp, mv_a );
     else
-        goto median;
+        goto median; //[question]!< b块和c块至少有一个是存在的，则取这三个邻块的运动矢量的中值作为预测运动矢量??
 }
 
 

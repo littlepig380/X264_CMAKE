@@ -1295,6 +1295,7 @@ static void mb_analyse_inter_p16x16( x264_t *h, x264_mb_analysis_t *a )
         LOAD_HPELS( &m, h->mb.pic.p_fref[0][i_ref], 0, i_ref, 0, 0 );
         LOAD_WPELS( &m, h->mb.pic.p_fref_w[i_ref], 0, i_ref, 0, 0 );
 
+        //[question]既然已知当前宏块neigber宏块参考情况, 为什么还要在参考帧中遍历来确认参考了那些帧??
         x264_mb_predict_mv_16x16( h, 0, i_ref, m.mvp ); //获得预测的运动矢量MV（通过取中值）这里没有复杂计算,就是获得MVp
 
         if( h->mb.ref_blind_dupe == i_ref )
@@ -1305,7 +1306,7 @@ static void mb_analyse_inter_p16x16( x264_t *h, x264_mb_analysis_t *a )
         else
         {
             x264_mb_predict_mv_ref16x16( h, 0, i_ref, mvc, &i_mvc );
-            x264_me_search_ref( h, &m, mvc, i_mvc, p_halfpel_thresh ); // 关键：运动估计（搜索参考帧）
+            x264_me_search_ref( h, &m, mvc, i_mvc, p_halfpel_thresh ); //[research]关键：运动估计（搜索参考帧）
         }
 
         /* save mv for predicting neighbors */

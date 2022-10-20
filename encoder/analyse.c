@@ -1321,9 +1321,9 @@ static void mb_analyse_inter_p16x16( x264_t *h, x264_mb_analysis_t *a )
             &&  abs(m.mv[0]-h->mb.cache.pskip_mv[0])
               + abs(m.mv[1]-h->mb.cache.pskip_mv[1]) <= 1
             && x264_macroblock_probe_pskip( h ) )
-        {
-            h->mb.i_type = P_SKIP;
-            analyse_update_cache( h, a );
+        {//如果探测成功
+            h->mb.i_type = P_SKIP;//设置宏块类型
+            analyse_update_cache( h, a );//更新当前宏块编码相关信息
             assert( h->mb.cache.pskip_mv[1] <= h->mb.mv_max_spel[1] || h->i_thread_frames == 1 );
             return;
         }
@@ -2990,17 +2990,17 @@ intra_analysis:
         else
         {
             /* Special fast-skip logic using information from mb_info. */
-            if( h->fdec->mb_info && (h->fdec->mb_info[h->mb.i_mb_xy]&X264_MBINFO_CONSTANT) )
+            if( h->fdec->mb_info && (h->fdec->mb_info[h->mb.i_mb_xy]&X264_MBINFO_CONSTANT) )//一般不会进来,待研究
             {
                 if( !SLICE_MBAFF && (h->fdec->i_frame - h->fref[0][0]->i_frame) == 1 && !h->sh.b_weighted_pred &&
                     h->fref[0][0]->effective_qp[h->mb.i_mb_xy] <= h->mb.i_qp )
                 {
                     h->mb.i_partition = D_16x16;
                     /* Use the P-SKIP MV if we can... */
-                    if( !M32(h->mb.cache.pskip_mv) )
+                    if( !M32(h->mb.cache.pskip_mv) )//pskip_mv全部为0
                     {
                         b_skip = 1;
-                        h->mb.i_type = P_SKIP;
+                        h->mb.i_type = P_SKIP;//宏块类型
                     }
                     /* Otherwise, just force a 16x16 block. */
                     else
@@ -3086,6 +3086,10 @@ skip_analysis:
             // d)、如果P8x8代价值小于P16x16，则依次对4个8x8的子宏块分割进行判断：
             // i、调用x264_mb_analyse_inter_p4x4()分析P4x4帧间预测的代价。
             // ii、如果P4x4代价值小于P8x8，则调用 x264_mb_analyse_inter_p8x4()和x264_mb_analyse_inter_p4x8()分析P8x4和P4x8帧间预测的代价。
+
+            // 《H.264标准》中规定，宏块划分（帧间预测）,
+            // 每个16x16的宏块可以划分为16x16，16x8，8x16，8x8四种类型。
+            // 如果宏块划分为8x8类型的时候，每个8x8宏块又可以划分为8x8，8x4，4x8，4x4四种小块
 
             if( ( flags & X264_ANALYSE_PSUB16x16 ) && (!analysis.b_early_terminate ||
                 analysis.l0.i_cost8x8 < analysis.l0.me16x16.cost) )

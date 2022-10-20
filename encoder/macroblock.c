@@ -985,6 +985,8 @@ void x264_macroblock_encode( x264_t *h )
  * x264_macroblock_probe_skip:
  *  Check if the current MB could be encoded as a [PB]_SKIP
  *****************************************************************************/
+//这里用于判断是不是能够做直接预测的宏块单位似乎只能是16*16,存疑,待验证
+// https://www.ulunwen.com/archives/7098
 static ALWAYS_INLINE int macroblock_probe_skip_internal( x264_t *h, int b_bidir, int plane_count, int chroma )
 {
     ALIGNED_ARRAY_64( dctcoef, dct4x4,[8],[16] );
@@ -992,44 +994,51 @@ static ALWAYS_INLINE int macroblock_probe_skip_internal( x264_t *h, int b_bidir,
     ALIGNED_4( int16_t mvp[2] );
     int i_qp = h->mb.i_qp;
 
+    //首先是亮度模块编码
     for( int p = 0; p < plane_count; p++, i_qp = h->mb.i_chroma_qp )
     {
         int quant_cat = p ? CQM_4PC : CQM_4PY;
-        if( !b_bidir )
+        if( !b_bidir )//如果是p帧类型而不是双向预测的b帧类型
         {
             /* Get the MV */
             mvp[0] = x264_clip3( h->mb.cache.pskip_mv[0], h->mb.mv_min[0], h->mb.mv_max[0] );
             mvp[1] = x264_clip3( h->mb.cache.pskip_mv[1], h->mb.mv_min[1], h->mb.mv_max[1] );
 
             /* Motion compensation */
+            //根据mvp得到亮度的宏块数据放入p_fdec中
             h->mc.mc_luma( h->mb.pic.p_fdec[p],    FDEC_STRIDE,
                            &h->mb.pic.p_fref[0][0][p*4], h->mb.pic.i_stride[p],
                            mvp[0], mvp[1], 16, 16, &h->sh.weight[0][p] );
         }
 
+        //针对4个8x8宏块做逐个操作
         for( int i8x8 = 0, i_decimate_mb = 0; i8x8 < 4; i8x8++ )
         {
+            //计算4个8x8子块在在宏块中的偏移
             int fenc_offset = (i8x8&1) * 8 + (i8x8>>1) * FENC_STRIDE * 8;
             int fdec_offset = (i8x8&1) * 8 + (i8x8>>1) * FDEC_STRIDE * 8;
 
+            /* get luma diff */ //应该是用当前宏块与预测宏块相减得到残差, 残差做dct变换
             h->dctf.sub8x8_dct( dct4x4, h->mb.pic.p_fenc[p] + fenc_offset,
                                         h->mb.pic.p_fdec[p] + fdec_offset );
 
-            if( h->mb.b_noise_reduction )
+            if( h->mb.b_noise_reduction ) //检查是否需要噪声消除,如果需要就以4*4为单位做回声消除
                 for( int i4x4 = 0; i4x4 < 4; i4x4++ )
                     h->quantf.denoise_dct( dct4x4[i4x4], h->nr_residual_sum[0+!!p*2], h->nr_offset[0+!!p*2], 16 );
-
+            /* encode one 4x4 block */
+            //对4x4宏块进行量化
             int nz = h->quantf.quant_4x4x4( dct4x4, h->quant4_mf[quant_cat][i_qp], h->quant4_bias[quant_cat][i_qp] );
+            //做zigzag扫描并通过扫描结果判定直接预测的skip模式是否符合要求
             FOREACH_BIT( idx, 0, nz )
             {
                 h->zigzagf.scan_4x4( dctscan, dct4x4[idx] );
                 i_decimate_mb += h->quantf.decimate_score16( dctscan );
-                if( i_decimate_mb >= 6 )
+                if( i_decimate_mb >= 6 ) //如果大于6，则返回非pskip, 表示不适合直接预测
                     return 0;
             }
         }
     }
-
+    // 然后是色度相关的编码, 
     if( chroma == CHROMA_420 || chroma == CHROMA_422 )
     {
         i_qp = h->mb.i_chroma_qp;
@@ -1042,6 +1051,7 @@ static ALWAYS_INLINE int macroblock_probe_skip_internal( x264_t *h, int b_bidir,
         {
             /* Special case for mv0, which is (of course) very common in P-skip mode. */
             if( M32( mvp ) )
+                //根据mvp得到色度的宏块数据放入p_fdec中
                 h->mc.mc_chroma( h->mb.pic.p_fdec[1], h->mb.pic.p_fdec[2], FDEC_STRIDE,
                                  h->mb.pic.p_fref[0][0][4], h->mb.pic.i_stride[1],
                                  mvp[0], mvp[1] * (1<<chroma422), 8, chroma422?16:8 );
@@ -1055,6 +1065,7 @@ static ALWAYS_INLINE int macroblock_probe_skip_internal( x264_t *h, int b_bidir,
             pixel *p_src = h->mb.pic.p_fenc[1+ch];
             pixel *p_dst = h->mb.pic.p_fdec[1+ch];
 
+            //[question]这个操作没有看懂, 看是P帧独有的操作
             if( !b_bidir && h->sh.weight[0][1+ch].weightfn )
                 h->sh.weight[0][1+ch].weightfn[8>>2]( h->mb.pic.p_fdec[1+ch], FDEC_STRIDE,
                                                       h->mb.pic.p_fdec[1+ch], FDEC_STRIDE,

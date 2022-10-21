@@ -2937,6 +2937,7 @@ static inline void mb_analyse_qp_rd( x264_t *h, x264_mb_analysis_t *a )
 /*****************************************************************************
  * x264_macroblock_analyse:
  *****************************************************************************/
+// https://blog.csdn.net/qq_41051855/article/details/79100635
 void x264_macroblock_analyse( x264_t *h )
 {
     x264_mb_analysis_t analysis;
@@ -2950,22 +2951,40 @@ void x264_macroblock_analyse( x264_t *h )
 
     if( h->param.analyse.b_mb_info )
         h->fdec->effective_qp[h->mb.i_mb_xy] = h->mb.i_qp; /* Store the real analysis QP. */
+
+    //宏块相关初始化
     mb_analyse_init( h, &analysis, h->mb.i_qp );
+
+    //I帧：只使用帧内预测，分别计算亮度16x16（4种）和4x4（9种）所有模式的代价值，选出代价最小的模式
+    //P帧：计算帧内模式和帧间模式（ P Slice允许有Intra宏块和P宏块；同理B帧也支持Intra宏块）。
+    //对P帧的每一种分割进行帧间预测，得到最佳的运动矢量及最佳匹配块。
+    //帧间预测过程：选出最佳矢量——>找到最佳的整像素点——>找到最佳的二分之一像素点——>找到最佳的1/4像素点
+    //然后取代价最小的为最佳MV和分割方式
+    //最后从帧内模式和帧间模式中选择代价比较小的方式（有可能没有找到很好的匹配块，这时候就直接使用帧内预测而不是帧间预测）。
 
     /*--------------------------- Do the analysis ---------------------------*/
     if( h->sh.i_type == SLICE_TYPE_I )
     {
+        //I slice
+        //通过一系列帧内预测模式（16x16的4种,4x4的9种）代价的计算得出代价最小的最优模式
 intra_analysis:
         if( analysis.i_mbrd )
             mb_init_fenc_cache( h, analysis.i_mbrd >= 2 );
+
+        //帧内预测分析
+        //从16×16的SAD,4个8×8的SAD和，16个4×4SAD中选出最优方式
         mb_analyse_intra( h, &analysis, COST_MAX ); // Intra宏块帧内预测模式分析。
         if( analysis.i_mbrd )
             intra_rd( h, &analysis, COST_MAX );
 
         i_cost = analysis.i_satd_i16x16;
         h->mb.i_type = I_16x16;
+        //如果I4x4或者I8x8开销更小的话就拷贝
+        //copy if little
         COPY2_IF_LT( i_cost, analysis.i_satd_i4x4, h->mb.i_type, I_4x4 );
         COPY2_IF_LT( i_cost, analysis.i_satd_i8x8, h->mb.i_type, I_8x8 );
+
+        //画面极其特殊的时候，才有可能用到PCM, 待论证
         if( analysis.i_satd_pcm < i_cost )
             h->mb.i_type = I_PCM;
 
@@ -2990,6 +3009,7 @@ intra_analysis:
         else
         {
             /* Special fast-skip logic using information from mb_info. */
+            // [question]看样子是特殊逻辑,待研究
             if( h->fdec->mb_info && (h->fdec->mb_info[h->mb.i_mb_xy]&X264_MBINFO_CONSTANT) )//一般不会进来,待研究
             {
                 if( !SLICE_MBAFF && (h->fdec->i_frame - h->fref[0][0]->i_frame) == 1 && !h->sh.b_weighted_pred &&
@@ -3044,11 +3064,13 @@ intra_analysis:
 
         if( b_skip )
         {
+            //如果可以用skip直接预测模式,设置相应的标志位
             h->mb.i_type = P_SKIP;
-            h->mb.i_partition = D_16x16;
+            h->mb.i_partition = D_16x16;//设置编码单位为16*16
             assert( h->mb.cache.pskip_mv[1] <= h->mb.mv_max_spel[1] || h->i_thread_frames == 1 );
 skip_analysis:
             /* Set up MVs for future predictors */
+            // 将当前块的情况如实记录供后续宏块编码使用, 记录过程是逐帧的
             for( int i = 0; i < h->mb.pic.i_fref[0]; i++ )
                 M32( h->mb.mvr[0][i][h->mb.i_mb_xy] ) = 0;
         }
@@ -3061,6 +3083,20 @@ skip_analysis:
 
             mb_analyse_load_costs( h, &analysis );
 
+            /*
+             * 16x16 帧间预测宏块分析-P
+             *
+             * +--------+--------+
+             * |                 |
+             * |                 |
+             * |                 |
+             * +        +        +
+             * |                 |
+             * |                 |
+             * |                 |
+             * +--------+--------+
+             *
+             */
             mb_analyse_inter_p16x16( h, &analysis ); //b)、调用mb_analyse_inter_p16x16()分析P16x16帧间预测的代价
 
             if( h->mb.i_type == P_SKIP )

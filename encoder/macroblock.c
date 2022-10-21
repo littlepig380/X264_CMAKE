@@ -1073,13 +1073,15 @@ static ALWAYS_INLINE int macroblock_probe_skip_internal( x264_t *h, int b_bidir,
 
             /* there is almost never a termination during chroma, but we can't avoid the check entirely */
             /* so instead we check SSD and skip the actual check if the score is low enough. */
+            // 用当前色度块的ssd标准差指标替代全盘检查,来反映色度块是否符合直接预测要求
             ssd = h->pixf.ssd[chroma422?PIXEL_8x16:PIXEL_8x8]( p_dst, FDEC_STRIDE, p_src, FENC_STRIDE );
-            if( ssd < thresh )
+            if( ssd < thresh ) //小于阈值就说明足够相似可以使用直接预测模式
                 continue;
 
             /* The vast majority of chroma checks will terminate during the DC check or the higher
              * threshold check, so we can save time by doing a DC-only DCT. */
-            if( h->mb.b_noise_reduction )
+            //1.这一段处理的是dc直流分量
+            if( h->mb.b_noise_reduction ) //是否启用噪声消除技术, 进行相减-dct变化
             {
                 for( int i = 0; i <= chroma422; i++ )
                     h->dctf.sub8x8_dct( &dct4x4[4*i], p_src + 8*i*FENC_STRIDE, p_dst + 8*i*FDEC_STRIDE );
@@ -1099,6 +1101,7 @@ static ALWAYS_INLINE int macroblock_probe_skip_internal( x264_t *h, int b_bidir,
                     h->dctf.sub8x8_dct_dc( dct_dc, p_src, p_dst );
             }
 
+            // 量化
             for( int i = 0; i <= chroma422; i++ )
                 if( h->quantf.quant_2x2_dc( &dct_dc[4*i], h->quant4_mf[CQM_4PC][i_qp+3*chroma422][0] >> 1,
                                             h->quant4_bias[CQM_4PC][i_qp+3*chroma422][0] << 1 ) )
@@ -1119,22 +1122,23 @@ static ALWAYS_INLINE int macroblock_probe_skip_internal( x264_t *h, int b_bidir,
                 }
 
             /* calculate dct coeffs */
-            for( int i8x8 = 0, i_decimate_mb = 0; i8x8 < (chroma422?2:1); i8x8++ )
+            //这一段处理的是交流分量
+            for( int i8x8 = 0, i_decimate_mb = 0; i8x8 < (chroma422?2:1); i8x8++ )//对色度进行量化,zipzap scan 然后抹系数
             {
                 int nz = h->quantf.quant_4x4x4( &dct4x4[i8x8*4], h->quant4_mf[CQM_4PC][i_qp], h->quant4_bias[CQM_4PC][i_qp] );
                 FOREACH_BIT( idx, i8x8*4, nz )
                 {
                     h->zigzagf.scan_4x4( dctscan, dct4x4[idx] );
                     i_decimate_mb += h->quantf.decimate_score15( dctscan );
-                    if( i_decimate_mb >= 7 )
+                    if( i_decimate_mb >= 7 ) //如果计算的值大于7，返回非pskip类型标识
                         return 0;
                 }
             }
         }
     }
 
-    h->mb.b_skip_mc = 1;
-    return 1;
+    h->mb.b_skip_mc = 1; //作为skip 的运动补偿标志
+    return 1; //判断为pskip类型
 }
 
 int x264_macroblock_probe_skip( x264_t *h, int b_bidir )

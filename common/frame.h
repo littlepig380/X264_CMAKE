@@ -79,6 +79,10 @@ typedef struct x264_frame
     int     i_lines_lowres;
     pixel *plane[3];
     pixel *plane_fld[3];
+    // filtered 图像半像素点存储缓存filtered[], 
+    // 其中前面的“[3]”代表Y，U，V三个分量，
+    // 后面的“[4]”分别存储了整像素, 
+    // H(横向)半像素, V(纵向)半像素, C（对角线）半像素的数据。
     pixel *filtered[3][4]; /* plane[0], H, V, HV */
     pixel *filtered_fld[3][4];
     pixel *lowres[4]; /* half-size copy of input frame: Orig, H, V, HV */
@@ -96,8 +100,8 @@ typedef struct x264_frame
     struct x264_frame *orig;
 
     /* motion data */
-    int8_t  *mb_type;
-    uint8_t *mb_partition;
+    int8_t  *mb_type; //当前宏块的编码类型
+    uint8_t *mb_partition; //决定当前宏块的切分模式
     int16_t (*mv[2])[2];
     int16_t (*mv16x16)[2];
     int16_t (*lowres_mvs[2][X264_BFRAME_MAX+1])[2];

@@ -125,7 +125,6 @@ median:
     else
         goto median;
 }
-        // x264_mb_predict_mv_16x16( h, 0, i_ref, m.mvp ); //获得预测的运动矢量MV（通过取中值）
 
 void x264_mb_predict_mv_16x16( x264_t *h, int i_list, int i_ref, int16_t mvp[2] )
 {
@@ -148,7 +147,7 @@ void x264_mb_predict_mv_16x16( x264_t *h, int i_list, int i_ref, int16_t mvp[2] 
     if( i_count > 1 ) //!< 相同数大于1时，直接取这三个邻块的运动矢量的中值作为预测运动矢量
     {
 median:
-        x264_median_mv( mvp, mv_a, mv_b, mv_c );
+        x264_median_mv( mvp, mv_a, mv_b, mv_c ); //取三个mv的中位数
     }
     else if( i_count == 1 ) //!< 只有一个邻块与其相同时，预测运动矢量设置为该邻块的运动矢量
     {
@@ -520,17 +519,36 @@ int x264_mb_predict_mv_direct16x16( x264_t *h, int *b_changed )
 }
 
 /* This just improves encoder performance, it's not part of the spec */
+// 相关函数解析可以看: 
+// https://blog.csdn.net/fanbird2008/article/details/30058969?locationNum=12
+// https://blog.csdn.net/fanbird2008/article/details/30058969
+
 void x264_mb_predict_mv_ref16x16( x264_t *h, int i_list, int i_ref, int16_t (*mvc)[2], int *i_mvc )
 {
+    // mvr数据结构的意思
+    // int16_t (*mvr[2][X264_REF_MAX*2])[2];/* 16x16 mv for each possible ref */
+    // mb.mvr 是一个指针数组， 指向一块int16_t[2]的数组
+    // 数组的每一个item保存的是该索引对应的宏块的最佳预测运动向量
+    // 因此mb.mvr保存的是每个参考list中每个参考帧每个16x16宏块的最佳预测运动向量
+
+    // 语法备忘小注释for int16_t (*mvr)[2]
+    // 定义了一个指针a，指向一个具有2个int元素的数组
+    // 使用方式：
+    // int (*a)[2];
+    // int p[2];
+    // a=&p;
+
     int16_t (*mvr)[2] = h->mb.mvr[i_list][i_ref];
     int i = 0;
 
+// SET_MVP宏就是拷贝mvp到mvc数组，并将mvc索引增加1
 #define SET_MVP(mvp) \
     { \
         CP32( mvc[i], mvp ); \
         i++; \
     }
 
+// 专为SLICE_MBAFF定义的宏
 #define SET_IMVP(xy) \
     if( xy >= 0 ) \
     { \
@@ -542,27 +560,31 @@ void x264_mb_predict_mv_ref16x16( x264_t *h, int i_list, int i_ref, int16_t (*mv
     }
 
     /* b_direct */
+    // 如果当前片为B片且当前宏块引用的正是i_ref这帧,就将i_ref这帧相同位置的mv当做这一帧对备选最佳mv
+    // [question]疑问:宏块的相关信息是否保存在cache当中的X264_SCAN8_0位置
     if( h->sh.i_type == SLICE_TYPE_B
-        && h->mb.cache.ref[i_list][x264_scan8[12]] == i_ref )
+        && h->mb.cache.ref[i_list][x264_scan8[12]] == i_ref ) //这里的12实际上就是之前X264_SCAN8_0宏
     {
         SET_MVP( h->mb.cache.mv[i_list][x264_scan8[12]] );
     }
 
-    if( i_ref == 0 && h->frames.b_have_lowres )
+    //[question]这个低分辨率b帧逻辑没有搞懂,先跳过
+    if( i_ref == 0 && h->frames.b_have_lowres )//如果进行了下采样,并且i_ref==0
     {
         int idx = i_list ? h->fref[1][0]->i_frame-h->fenc->i_frame-1
-                         : h->fenc->i_frame-h->fref[0][0]->i_frame-1;
+                         : h->fenc->i_frame-h->fref[0][0]->i_frame-1; //取fref1 或fref0 的偏移当前帧的距离
         if( idx <= h->param.i_bframe )
         {
-            int16_t (*lowres_mv)[2] = h->fenc->lowres_mvs[i_list][idx];
+            int16_t (*lowres_mv)[2] = h->fenc->lowres_mvs[i_list][idx];//获得下采样运动向量
             if( lowres_mv[0][0] != 0x7fff )
             {
-                M32( mvc[i] ) = (M32( lowres_mv[h->mb.i_mb_xy] )*2)&0xfffeffff;
+                M32( mvc[i] ) = (M32( lowres_mv[h->mb.i_mb_xy] )*2)&0xfffeffff;//赋值为mvc[i]
                 i++;
             }
         }
     }
 
+    // 空间预测
     /* spatial predictors */
     if( SLICE_MBAFF )
     {
@@ -573,14 +595,21 @@ void x264_mb_predict_mv_ref16x16( x264_t *h, int i_list, int i_ref, int16_t (*mv
     }
     else
     {
+        // 保存参考list 为i_list, 参考帧索引号为i_ref
+        // 对应宏块的左宏块的mv到mvc数组
         SET_MVP( mvr[h->mb.i_mb_left_xy[0]] );
+        // 上方宏块
         SET_MVP( mvr[h->mb.i_mb_top_xy] );
+        // 左上方宏块
         SET_MVP( mvr[h->mb.i_mb_topleft_xy] );
+        // 右上方宏块
         SET_MVP( mvr[h->mb.i_mb_topright_xy] );
     }
 #undef SET_IMVP
 #undef SET_MVP
 
+    // 时间预测
+    // [question]时间关系这段没有看的很明白,待研究
     /* temporal predictors */
     if( h->fref[0][0]->i_ref[0] > 0 )
     {
@@ -599,13 +628,13 @@ void x264_mb_predict_mv_ref16x16( x264_t *h, int i_list, int i_ref, int16_t (*mv
             i++; \
         }
 
-        SET_TMVP(0,0);
+        SET_TMVP(0,0); // 当前宏块预测运动向量进行 scale
         if( h->mb.i_mb_x < h->mb.i_mb_width-1 )
-            SET_TMVP(1,0);
+            SET_TMVP(1,0);  // 当前宏块右宏块预测向量进行 scale
         if( h->mb.i_mb_y < h->mb.i_mb_height-1 )
-            SET_TMVP(0,1);
+            SET_TMVP(0,1);  // 当前宏块底宏块预测向量进行 scale
 #undef SET_TMVP
     }
 
-    *i_mvc = i;
+    *i_mvc = i; // 返回 候选的 mv 数目
 }

@@ -2292,6 +2292,8 @@ static inline int reference_distance( x264_t *h, x264_frame_t *frame )
         return abs(h->fenc->i_frame - frame->i_frame);
 }
 
+//参考帧队列建立
+//参考连接 https://www.twblogs.net/a/5b8ce09e2b71771883367e44
 static inline void reference_build_list( x264_t *h, int i_poc )
 {
     int b_ok;

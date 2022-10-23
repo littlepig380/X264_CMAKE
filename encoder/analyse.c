@@ -1254,24 +1254,15 @@ static void intra_rd_refine( x264_t *h, x264_mb_analysis_t *a )
 #define REF_COST(list, ref) \
     (a->p_cost_ref[list][ref])
 
-// /*
-// ======Analysed by RuiDong Fang
-// ======Csdn Blog:http://blog.csdn.net/frd2009041510
-// ======Date:2016.03.17
-//  */
-
-// /************====== x264_mb_analyse_inter_p16x16()函数 ======************/
-// /*
 // 功能：帧间预测:16*16大小的P Slice
-// */
-
+// 参考解析:https://blog.csdn.net/frd2009041510/article/details/50917282
 static void mb_analyse_inter_p16x16( x264_t *h, x264_mb_analysis_t *a )
 {
     //运动估计相关的信息  
     //后面的初始化工作主要是对该结构体赋值
     x264_me_t m;
-    int i_mvc;
-    ALIGNED_ARRAY_8( int16_t, mvc,[8],[2] );
+    int i_mvc; //用于记录候选的 mv 数目
+    ALIGNED_ARRAY_8( int16_t, mvc,[8],[2] ); //最多可以存放8个数组
     int i_halfpel_thresh = INT_MAX;
     int *p_halfpel_thresh = (a->b_early_terminate && h->mb.pic.i_fref[0]>1) ? &i_halfpel_thresh : NULL;
 
@@ -1284,6 +1275,7 @@ static void mb_analyse_inter_p16x16( x264_t *h, x264_mb_analysis_t *a )
 	//循环搜索所有的参考帧
     //i_ref
     //mb.pic.i_fref[0]存储了参考帧的个数, 当前帧时P帧, 只有前向参考帧可用, 所以只用到list0
+    //从最近的的一个参考帧开始搜索最佳的运动矢量
     for( int i_ref = 0; i_ref < h->mb.pic.i_fref[0]; i_ref++ )
     {
         m.i_ref_cost = REF_COST( 0, i_ref );
@@ -1296,7 +1288,9 @@ static void mb_analyse_inter_p16x16( x264_t *h, x264_mb_analysis_t *a )
         LOAD_WPELS( &m, h->mb.pic.p_fref_w[i_ref], 0, i_ref, 0, 0 );
 
         //[question]既然已知当前宏块neigber宏块参考情况, 为什么还要在参考帧中遍历来确认参考了那些帧??
-        x264_mb_predict_mv_16x16( h, 0, i_ref, m.mvp ); //获得预测的运动矢量MV（通过取中值）这里没有复杂计算,就是获得MVp
+        //从当前编码宏块的相邻宏块信息中获得预测的运动矢量MVp（通过取中值）这里没有复杂计算,就是获得MVp
+        //--->这里计算的是空间上相邻的宏块的mv进行参考的结果
+        x264_mb_predict_mv_16x16( h, 0, i_ref, m.mvp );
 
         if( h->mb.ref_blind_dupe == i_ref )
         {
@@ -1305,8 +1299,13 @@ static void mb_analyse_inter_p16x16( x264_t *h, x264_mb_analysis_t *a )
         }
         else
         {
+            // 当前编码块的相邻宏块信息的mv还不够,还需要找参考帧中对应位置的mv信息
+            // 要找到每一帧参考帧在当前宏块这个相同位置mv以及其空间相邻的左,左上,上,右上的块的mv
+            // 以及最近的参考帧队列中当前块/当前块右边和下边块的运动矢量乘以时间差权重
+            // 注意这里收集了参考帧队列中依照空间的位置关系的候选mv与依照时间关系的候选mv
             x264_mb_predict_mv_ref16x16( h, 0, i_ref, mvc, &i_mvc );
-            x264_me_search_ref( h, &m, mvc, i_mvc, p_halfpel_thresh ); //[research]关键：运动估计（搜索参考帧）
+            //[research]关键：运动估计（搜索参考帧）
+            x264_me_search_ref( h, &m, mvc, i_mvc, p_halfpel_thresh );
         }
 
         /* save mv for predicting neighbors */
@@ -1315,6 +1314,9 @@ static void mb_analyse_inter_p16x16( x264_t *h, x264_mb_analysis_t *a )
 
         /* early termination
          * SSD threshold would probably be better than SATD */
+        //通过是否应用的是最近的一个参考帧, 方差是否符合条件, ,还有直接预测的结果来判断能否提前结束
+        //i_lambda是人眼对损失的补偿系数,用来校正主观上的失真情况
+        //相关内容可以查阅 https://zhuanlan.zhihu.com/p/473593903
         if( i_ref == 0
             && a->b_try_skip
             && m.cost-m.cost_mv < 300*a->i_lambda
@@ -2937,7 +2939,23 @@ static inline void mb_analyse_qp_rd( x264_t *h, x264_mb_analysis_t *a )
 /*****************************************************************************
  * x264_macroblock_analyse:
  *****************************************************************************/
+// 函数解析参考文章
 // https://blog.csdn.net/qq_41051855/article/details/79100635
+// https://developer.aliyun.com/article/31067
+
+//  尽管x264_macroblock_analyse()的源代码比较长，但是它的逻辑比较清晰，如下所示：
+// （1）、如果当前是I Slice，调用x264_mb_analyse_intra()进行Intra宏块的帧内预测模式分析。
+// （2）、如果当前是P Slice，则进行下面流程的分析：
+//     a)、调用x264_macroblock_probe_pskip()分析是否为Skip宏块，如果是的话则不再进行下面分析。
+//     b)、调用x264_mb_analyse_inter_p16x16()分析P16x16帧间预测的代价。
+//     c)、调用x264_mb_analyse_inter_p8x8()分析P8x8帧间预测的代价。
+//     d)、如果P8x8代价值小于P16x16，则依次对4个8x8的子宏块分割进行判断：
+//         i、调用x264_mb_analyse_inter_p4x4()分析P4x4帧间预测的代价。
+//         ii、如果P4x4代价值小于P8x8，则调用 x264_mb_analyse_inter_p8x4()和x264_mb_analyse_inter_p4x8()分析P8x4和P4x8帧间预测的代价。
+//     e)、如果P8x8代价值小于P16x16，调用x264_mb_analyse_inter_p16x8()和x264_mb_analyse_inter_p8x16()分析P16x8和P8x16帧间预测的代价。
+//     f)、此外还要调用x264_mb_analyse_intra()，检查当前宏块作为Intra宏块编码的代价是否小于作为P宏块编码的代价（P Slice中也允许有Intra宏块）。
+// （3）、如果当前是B Slice，则进行和P Slice类似的处理。
+
 void x264_macroblock_analyse( x264_t *h )
 {
     x264_mb_analysis_t analysis;

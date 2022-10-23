@@ -565,6 +565,8 @@ NOINLINE void x264_copy_column8( pixel *dst, pixel *src )
         dst[i*FDEC_STRIDE] = src[i*FDEC_STRIDE];
 }
 
+//x264_macroblock_load_pic_pointers()用于给宏块重建像素p_fdec[]和宏块编码像素p_fenc[]加载数据，并且加载图像的半像素数据。
+//参看解析:https://blog.csdn.net/u011028345/article/details/75256552
 static ALWAYS_INLINE void macroblock_load_pic_pointers( x264_t *h, int mb_x, int mb_y, int i, int b_chroma, int b_mbaff )
 {
     int mb_interlaced = b_mbaff && MB_INTERLACED;

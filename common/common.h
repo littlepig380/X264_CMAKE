@@ -489,6 +489,7 @@ struct x264_t
         int     mv_maxy_fpel_row[3];
 
         /* neighboring MBs */
+        // [question]疑似记录当前正在编码宏块周围的相邻宏块的信息
         unsigned int i_neighbour;
         unsigned int i_neighbour8[4];       /* neighbours of each 8x8 or 4x4 block that are available */
         unsigned int i_neighbour4[16];      /* at the time the block is coded */
@@ -571,6 +572,90 @@ struct x264_t
 #define FDEC_STRIDE 32
             ALIGNED_64( pixel fenc_buf[48*FENC_STRIDE] );
             ALIGNED_64( pixel fdec_buf[54*FDEC_STRIDE] );
+        // /*
+        //  * fdec_buf和fenc_buf简易存储示意图
+        //  * fdec_buf用于存储重建帧
+        //  * fenc_buf用于存储编码帧
+        //  *
+        //  * 存储结果如图所示
+        //  * fdec_buf用于存储数据;fdec[0],fdec[1],fdec[2]指向fdec_buf的不同位置
+        //  *           4:2:0                      4:2:2                      4:4:4
+        //  * fdec            fenc       fdec            fenc       fdec            fenc
+        //  * y y y y y y y   Y Y Y Y    y y y y y y y   Y Y Y Y    y y y y y y y   Y Y Y Y
+        //  * y Y Y Y Y       Y Y Y Y    y Y Y Y Y       Y Y Y Y    y Y Y Y Y       Y Y Y Y
+        //  * y Y Y Y Y       Y Y Y Y    y Y Y Y Y       Y Y Y Y    y Y Y Y Y       Y Y Y Y
+        //  * y Y Y Y Y       Y Y Y Y    y Y Y Y Y       Y Y Y Y    y Y Y Y Y       Y Y Y Y
+        //  * y Y Y Y Y       U U V V    y Y Y Y Y       U U V V    y Y Y Y Y       U U U U
+        //  * u u u   v v v   U U V V    u u u   v v v   U U V V    u u u u u u u   U U U U
+        //  * u U U   v V V              u U U   v V V   U U V V    u U U U U       U U U U
+        //  * u U U   v V V              u U U   v V V   U U V V    u U U U U       U U U U
+        //  *                            u U U   v V V              u U U U U       V V V V
+        //  *                            u U U   v V V              u U U U U       V V V V
+        //  *                                                       v v v v v v v   V V V V
+        //  *                                                       v V V V V       V V V V
+        //  *                                                       v V V V V
+        //  *                                                       v V V V V
+        //  *                                                       v V V V V
+        //  *
+        //  * fdec_buf详细存储示例（YUV420P）
+        //  * y、u、v为预测要用到的数据
+        //  * Y、U、V为像素数据
+        //  * 每行32像素
+        //  *
+        //  * p_fdec[0] = fdec_buf + 2*32;
+        //  * p_fdec[1] = fdec_buf + 19*32;
+        //  * p_fdec[2] = fdec_buf + 19*32+16;
+        //  *
+        //  *
+        //  * 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 y
+        //  * y y y y y y y y y y y y y y y y 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 y
+        //  * Y Y Y Y Y Y Y Y Y Y Y Y Y Y Y Y 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 y
+        //  * Y Y Y Y Y Y Y Y Y Y Y Y Y Y Y Y 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 y
+        //  * Y Y Y Y Y Y Y Y Y Y Y Y Y Y Y Y 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 y
+        //  * Y Y Y Y Y Y Y Y Y Y Y Y Y Y Y Y 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 y
+        //  *                              ...
+        //  *                              Y一共16行
+        //  *                              ...
+        //  * Y Y Y Y Y Y Y Y Y Y Y Y Y Y Y Y 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 y
+        //  * Y Y Y Y Y Y Y Y Y Y Y Y Y Y Y Y 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 y
+        //  * Y Y Y Y Y Y Y Y Y Y Y Y Y Y Y Y 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 u
+        //  * u u u u u u u u 0 0 0 0 0 0 0 v v v v v v v v v 0 0 0 0 0 0 0 u
+        //  * U U U U U U U U 0 0 0 0 0 0 0 v V V V V V V V V 0 0 0 0 0 0 0 u
+        //  * U U U U U U U U 0 0 0 0 0 0 0 v V V V V V V V V 0 0 0 0 0 0 0 u
+        //  * U U U U U U U U 0 0 0 0 0 0 0 v V V V V V V V V 0 0 0 0 0 0 0 u
+        //  * U U U U U U U U 0 0 0 0 0 0 0 v V V V V V V V V 0 0 0 0 0 0 0 u
+        //  *                              ...
+        //  *                              UV一共8行
+        //  *                              ...
+        //  *
+        //  * =============================================================================
+        //  *
+        //  * fenc_buf详细存储示例（YUV420P）
+        //  * Y、U、V为像素数据
+        //  * 每行16像素
+        //  *
+        //  * p_fenc[0] = fenc_buf + 0;
+        //  * p_fenc[1] = fenc_buf + 16*32;
+        //  * p_fenc[2] = fenc_buf + 16*32+8;
+        //  *
+        //  * Y Y Y Y Y Y Y Y Y Y Y Y Y Y Y Y
+        //  * Y Y Y Y Y Y Y Y Y Y Y Y Y Y Y Y
+        //  * Y Y Y Y Y Y Y Y Y Y Y Y Y Y Y Y
+        //  * Y Y Y Y Y Y Y Y Y Y Y Y Y Y Y Y
+        //  *            ...
+        //  *          Y一共16行
+        //  *            ...
+        //  * Y Y Y Y Y Y Y Y Y Y Y Y Y Y Y Y
+        //  * Y Y Y Y Y Y Y Y Y Y Y Y Y Y Y Y
+        //  * Y Y Y Y Y Y Y Y Y Y Y Y Y Y Y Y
+        //  * U U U U U U U U V V V V V V V V
+        //  * U U U U U U U U V V V V V V V V
+        //  * U U U U U U U U V V V V V V V V
+        //  * U U U U U U U U V V V V V V V V
+        //  *            ...
+        //  *          UV一共8行
+        //  *            ...
+        //  */
 
             /* i4x4 and i8x8 backup data, for skipping the encode stage when possible */
             ALIGNED_32( pixel i4x4_fdec_buf[16*16] );
@@ -611,6 +696,13 @@ struct x264_t
         } pic;
 
         /* cache */
+        // [question]目前对cache的理解来看, 这个结构体并不直接储存数据, 只存储数据编码相关的信息(),
+        // cache中数组的每一个点代表一个4*4的块,待研究
+        // 在x264中x264_t.mb.cache结构体中包含了存储宏块信息的各种各样的缓存Cache
+        // intra4x4_pred_mode：Intra4x4帧内预测模式的缓存
+        // non_zero_count：DCT的非0系数个数的缓存
+        // mv：运动矢量缓存
+        // ref：运动矢量参考帧的缓存
         struct
         {
             /* real intra4x4_pred_mode if I_4X4 or I_8X8, I_PRED_4x4_DC if mb available, -1 if not */
@@ -626,7 +718,7 @@ struct x264_t
 			 *   | 0 0 0 y Y Y Y Y
 			 */
             
-            ALIGNED_16( int8_t intra4x4_pred_mode[X264_SCAN8_LUMA_SIZE] );
+            ALIGNED_16( int8_t intra4x4_pred_mode[X264_SCAN8_LUMA_SIZE] ); //Intra4x4帧内预测模式的缓存
 
             /* i_non_zero_count if available else 0x80. intentionally misaligned by 8 for asm */
 
@@ -651,13 +743,13 @@ struct x264_t
              *   | 0 0 0 v V V V V
              */
 
-            ALIGNED_8( uint8_t non_zero_count[X264_SCAN8_SIZE] );
+            ALIGNED_8( uint8_t non_zero_count[X264_SCAN8_SIZE] );//DCT的非0系数个数的缓存
 
             /* -1 if unused, -2 if unavailable */
             ALIGNED_4( int8_t ref[2][X264_SCAN8_LUMA_SIZE] );
 
             /* 0 if not available */
-            ALIGNED_16( int16_t mv[2][X264_SCAN8_LUMA_SIZE][2] );
+            ALIGNED_16( int16_t mv[2][X264_SCAN8_LUMA_SIZE][2] );// mv：运动矢量缓存
             ALIGNED_8( uint8_t mvd[2][X264_SCAN8_LUMA_SIZE][2] );
 
             /* 1 if SKIP or DIRECT. set only for B-frames + CABAC */
@@ -683,6 +775,54 @@ struct x264_t
             /* current mb deblock strength */
             uint8_t (*deblock_strength)[8][4];
         } cache;
+    // 关于cache的组织结构
+    // /*
+    //  *
+    //  * 关于多次出现的scan8
+    //  *
+    //  * scan8是和cache配合使用的
+    //  * cache是一个表格。表格中存储了一整个宏块的信息，每一个元素代表了一个“4x4亮度块”（H.264中最小的亮度处理单位）。
+    //  * scan8[]则存储了宏块信息在cache中的索引值
+    //  *
+    //  * scan8[]中的“8”，意思应该是按照8x8为单元来扫描？
+    //  * 因此可以理解为“按照8x8为单元来扫描4x4的块”？
+    //  *
+    //  * scan8中按照顺序分别存储了Y，U，V信息在cache中的索引值。具体的存储还是在相应的cache中。
+    //  *
+    //  * cache中首先存储Y，然后存储U和V。cache中的存储方式如下所示。
+    //  * 其中数字代表了scan8[]中元素的索引值
+    //  *
+    //  * +---+---+---+---+---+---+---+---+---+
+    //  * |   | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 |
+    //  * +---+---+---+---+---+---+---+---+---+
+    //  * | 0 | 48|   |   |   |  y|  y|  y|  y|
+    //  * | 1 |   |   |   |  y|  0|  1|  4|  5|
+    //  * | 2 |   |   |   |  y|  2|  3|  6|  7|
+    //  * | 3 |   |   |   |  y|  8|  9| 12| 13|
+    //  * | 4 |   |   |   |  y| 10| 11| 14| 15|
+    //  * | 5 | 49|   |   |   |  u|  u|  u|  u|
+    //  * | 6 |   |   |   |  u| 16| 17| 20| 21|
+    //  * | 7 |   |   |   |  u| 18| 19| 22| 23|
+    //  * | 8 |   |   |   |  u| 24| 25| 28| 29|
+    //  * | 9 |   |   |   |  u| 26| 27| 30| 31|
+    //  * |10 | 50|   |   |   |  v|  v|  v|  v|
+    //  * |11 |   |   |   |  v| 32| 33| 36| 37|
+    //  * |12 |   |   |   |  v| 34| 35| 38| 39|
+    //  * |13 |   |   |   |  v| 40| 41| 44| 45|
+    //  * |14 |   |   |   |  v| 42| 43| 46| 47|
+    //  * |---+---+---+---+---+---+---+---+---+
+    //  * |   |
+    //  *
+	//  * 扫描方式：
+	//  * o-o o-o
+	//  *  / / /
+	//  * o-o o-o
+	//  *  ,---'
+	//  * o-o o-o
+	//  *  / / /
+	//  * o-o o-o
+	//  *
+    //  */
 
         /* */
         int     i_qp;       /* current qp */

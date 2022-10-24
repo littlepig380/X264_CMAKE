@@ -145,7 +145,7 @@ void x264_mb_predict_mv_16x16( x264_t *h, int i_list, int i_ref, int16_t mvp[2] 
     int i_count = (i_refa == i_ref) + (i_refb == i_ref) + (i_refc == i_ref);
 
     if( i_count > 1 ) //!< 相同数大于1时，直接取这三个邻块的运动矢量的中值作为预测运动矢量
-    {
+    { 
 median:
         x264_median_mv( mvp, mv_a, mv_b, mv_c ); //取三个mv的中位数
     }
@@ -520,7 +520,6 @@ int x264_mb_predict_mv_direct16x16( x264_t *h, int *b_changed )
 
 /* This just improves encoder performance, it's not part of the spec */
 // 相关函数解析可以看: 
-// https://blog.csdn.net/fanbird2008/article/details/30058969?locationNum=12
 // https://blog.csdn.net/fanbird2008/article/details/30058969
 
 void x264_mb_predict_mv_ref16x16( x264_t *h, int i_list, int i_ref, int16_t (*mvc)[2], int *i_mvc )
@@ -559,11 +558,34 @@ void x264_mb_predict_mv_ref16x16( x264_t *h, int i_list, int i_ref, int16_t (*mv
         i++; \
     }
 
+    //  * scan8[]助记元素的索引值
+    //  *
+    //  * +---+---+---+---+---+---+---+---+---+
+    //  * |   | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 |
+    //  * +---+---+---+---+---+---+---+---+---+
+    //  * | 0 | 48|   |   |   |  y|  y|  y|  y|
+    //  * | 1 |   |   |   |  y|  0|  1|  4|  5|
+    //  * | 2 |   |   |   |  y|  2|  3|  6|  7|
+    //  * | 3 |   |   |   |  y|  8|  9| 12| 13|
+    //  * | 4 |   |   |   |  y| 10| 11| 14| 15|
+    //  * | 5 | 49|   |   |   |  u|  u|  u|  u|
+    //  * | 6 |   |   |   |  u| 16| 17| 20| 21|
+    //  * | 7 |   |   |   |  u| 18| 19| 22| 23|
+    //  * | 8 |   |   |   |  u| 24| 25| 28| 29|
+    //  * | 9 |   |   |   |  u| 26| 27| 30| 31|
+    //  * |10 | 50|   |   |   |  v|  v|  v|  v|
+    //  * |11 |   |   |   |  v| 32| 33| 36| 37|
+    //  * |12 |   |   |   |  v| 34| 35| 38| 39|
+    //  * |13 |   |   |   |  v| 40| 41| 44| 45|
+    //  * |14 |   |   |   |  v| 42| 43| 46| 47|
+    //  * |---+---+---+---+---+---+---+---+---+
+    //  * 
+
     /* b_direct */
-    // 如果当前片为B片且当前宏块引用的正是i_ref这帧,就将i_ref这帧相同位置的mv当做这一帧对备选最佳mv
-    // [question]疑问:宏块的相关信息是否保存在cache当中的X264_SCAN8_0位置
+    // 如果当前片为B片且当前宏块右下8*8引用的正是i_ref这帧,就将这个8*8宏块的mv作为最佳mv候选放入mvc中
+    // [question]疑问:为什么选择右下的8*8的位置的信息?
     if( h->sh.i_type == SLICE_TYPE_B
-        && h->mb.cache.ref[i_list][x264_scan8[12]] == i_ref ) //这里的12实际上就是之前X264_SCAN8_0宏
+        && h->mb.cache.ref[i_list][x264_scan8[12]] == i_ref ) //这里12按照cache的存储方式, 存放的是当前宏块中右下8*8子宏块的相关信息
     {
         SET_MVP( h->mb.cache.mv[i_list][x264_scan8[12]] );
     }
@@ -597,6 +619,9 @@ void x264_mb_predict_mv_ref16x16( x264_t *h, int i_list, int i_ref, int16_t (*mv
     {
         // 保存参考list 为i_list, 参考帧索引号为i_ref
         // 对应宏块的左宏块的mv到mvc数组
+        // [question] 这里对于mvr的理解不是很清晰,待研究,
+        // 还没有搞懂为什么可以通过mvr数组找到相邻宏块的mv,
+        // 观察mvr的构建方向实际上mvr是一个很小的数组,为什么支持很大序号的索引???
         SET_MVP( mvr[h->mb.i_mb_left_xy[0]] );
         // 上方宏块
         SET_MVP( mvr[h->mb.i_mb_top_xy] );
@@ -636,5 +661,5 @@ void x264_mb_predict_mv_ref16x16( x264_t *h, int i_list, int i_ref, int16_t (*mv
 #undef SET_TMVP
     }
 
-    *i_mvc = i; // 返回 候选的 mv 数目
+    *i_mvc = i; // 返回候选的mv candidat数目
 }

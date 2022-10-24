@@ -501,7 +501,7 @@ struct x264_t
         int     i_mb_type_topright;
         int     i_mb_prev_xy;
         int     i_mb_left_xy[2];
-        int     i_mb_top_xy;
+        int     i_mb_top_xy; // 实际上这些都是相邻宏块编号,根据位置变化而变化
         int     i_mb_topleft_xy;
         int     i_mb_topright_xy;
         int     i_mb_top_y;

@@ -1262,7 +1262,7 @@ static void mb_analyse_inter_p16x16( x264_t *h, x264_mb_analysis_t *a )
     //后面的初始化工作主要是对该结构体赋值
     x264_me_t m;
     int i_mvc; //用于记录候选的 mv 数目
-    ALIGNED_ARRAY_8( int16_t, mvc,[8],[2] ); //最多可以存放8个数组
+    ALIGNED_ARRAY_8( int16_t, mvc,[8],[2] ); //最多可以存放8个候选的mv candidate
     int i_halfpel_thresh = INT_MAX;
     int *p_halfpel_thresh = (a->b_early_terminate && h->mb.pic.i_fref[0]>1) ? &i_halfpel_thresh : NULL;
 
@@ -1287,9 +1287,11 @@ static void mb_analyse_inter_p16x16( x264_t *h, x264_mb_analysis_t *a )
         LOAD_HPELS( &m, h->mb.pic.p_fref[0][i_ref], 0, i_ref, 0, 0 );
         LOAD_WPELS( &m, h->mb.pic.p_fref_w[i_ref], 0, i_ref, 0, 0 );
 
-        //[question]既然已知当前宏块neigber宏块参考情况, 为什么还要在参考帧中遍历来确认参考了那些帧??
-        //从当前编码宏块的相邻宏块信息中获得预测的运动矢量MVp（通过取中值）这里没有复杂计算,就是获得MVp
-        //--->这里计算的是空间上相邻的宏块的mv进行参考的结果
+        // mvp的存在,个人理解是当前编码宏块对于这个参考帧i_ref的最高优先级搜索方向,主要目的是节省计算开销
+        // 1.如果这一帧里面多个相邻块引用同一个i_ref则将其中位数列为mvp
+        // 2.如果只有一个引用了i_ref则直接成为mvp
+        // 3.如果相邻的几个块引用的i_ref各不相同, 则取各个相邻块的mv的中位数为mvp
+        // 这里预测的依据完全听过intra帧内相邻块得到
         x264_mb_predict_mv_16x16( h, 0, i_ref, m.mvp );
 
         if( h->mb.ref_blind_dupe == i_ref )
@@ -1299,10 +1301,11 @@ static void mb_analyse_inter_p16x16( x264_t *h, x264_mb_analysis_t *a )
         }
         else
         {
-            // 当前编码块的相邻宏块信息的mv还不够,还需要找参考帧中对应位置的mv信息
+            // 仅仅依靠mvp来做运动搜索是不够的,还需要找参考帧中对应位置的mv信息(就是不做中位数操作的原始mv)
             // 要找到每一帧参考帧在当前宏块这个相同位置mv以及其空间相邻的左,左上,上,右上的块的mv
             // 以及最近的参考帧队列中当前块/当前块右边和下边块的运动矢量乘以时间差权重
             // 注意这里收集了参考帧队列中依照空间的位置关系的候选mv与依照时间关系的候选mv
+            // 这里的优先级个人理解相较于mvp是低的, 在mvp没有得到理想结果的时候需要搜索mvc数组
             x264_mb_predict_mv_ref16x16( h, 0, i_ref, mvc, &i_mvc );
             //[research]关键：运动估计（搜索参考帧）
             x264_me_search_ref( h, &m, mvc, i_mvc, p_halfpel_thresh );

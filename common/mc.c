@@ -215,17 +215,61 @@ static void mc_luma( pixel *dst,    intptr_t i_dst_stride,
         mc_copy( src1, i_src_stride, dst, i_dst_stride, i_width, i_height );
 }
 
+// 解析参考链接:https://blog.csdn.net/fanbird2008/article/details/30075187
 static pixel *get_ref( pixel *dst,   intptr_t *i_dst_stride,
                        pixel *src[4], intptr_t i_src_stride,
                        int mvx, int mvy,
                        int i_width, int i_height, const x264_weight_t *weight )
 {
+    // mvx, mvy 表示需要进行1/4像素插值的1/4 像素点的坐标
+    // 如(1, 1) 就表示需要求1/4像素点(1, 1)的插值
+    // 这需要用到水平1/2和垂直1/2像素点平面
+   
+    // 对于水平两个相邻整像素位， 其位置可用0, 1表示
+    // 放大到子像素后， 其位置变为0, 4,
+    // 其中的1， 2，3 分别表示 1/4, 2/4, 3/4像素位
+    // 因此如果 mvx & 3 == 1, 表示水平1/4像素位
+    // mvx & 3 == 2， 表示水平2/4 = 1/2 像素位
+    // mvx & == 3, 表示水平 3/4 像素位
+    //
     int qpel_idx = ((mvy&3)<<2) + (mvx&3);
     int offset = (mvy>>2)*i_src_stride + (mvx>>2);
+
+    // 传入的 src = m->p_fref 是一个指针数组,
+    // 这个是在 x264_mb_analyse_inter_p16x16 函数中
+    // 调用 LOAD_HPELS 进行装载的
+    // src[0] 指向 整像素平面， src[1] 指向 1/2 像素平面
+    // src[2] 指向垂直 1/2 像素平面， src[3] 指向斜对角 1/2 像素平面
+    // 这些平面是为计算 1/4 像素准备的， 1/4 插值是取两个像素的中值
+    // 因此需要两个平面
+    // 对于 G x b x G
+    //      y z y z y
+    //      h x i x h
+    //      y z y z y
+    //      G x b x G
+    //  其中G是整像素，对应src[0]；
+    //  b 水平方向 1/2 像素,对应src[1]；
+    //  h 是垂直方向 1/2 像素，对应src[2]；
+    //  i 是 斜对角方向 1/2 像素， 对应src[3]；
+    //  如想计算i左上角z的像素值， 即pixel(1, 1)的值
+    //  那么就需要水平1/2像素平面，和垂直1/2像素平面
+    //  pixel(1,1) = (pixel(0,2 ) + pixel(2, 0) + 1) >>1
+   
+    // 获取其中一个平面的像素位
+    // hpel_ref0[qpel_idx] 得到平面索引
+    // src[hpel_ref0[qpel_idx]] + offset 得到该平面整像素位地址
+    // 那么src1得到的上面地址，或向垂直方向移动一行，到下一个整像素
+    // 点
+
     pixel *src1 = src[x264_hpel_ref0[qpel_idx]] + offset + ((mvy&3) == 3) * i_src_stride;
 
+    // 需要进行 1/4 像素插值
     if( qpel_idx & 5 ) /* qpel interpolation needed */
     {
+        // 如果qpel_idx & 5 不为0,
+        // 则说明水平或垂直方向的 1/4，或 3/4 像素位需要插值
+        // src2 指向 hpel_ref1[pel_idx]平面索引所指平面
+        // 并偏移 offset, 在x方向可能需要偏移一个像素
         pixel *src2 = src[x264_hpel_ref1[qpel_idx]] + offset + ((mvx&3) == 3);
         pixel_avg( dst, *i_dst_stride, src1, i_src_stride,
                    src2, i_src_stride, i_width, i_height );

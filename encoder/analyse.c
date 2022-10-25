@@ -1292,6 +1292,7 @@ static void mb_analyse_inter_p16x16( x264_t *h, x264_mb_analysis_t *a )
         // 2.如果只有一个引用了i_ref则直接成为mvp
         // 3.如果相邻的几个块引用的i_ref各不相同, 则取各个相邻块的mv的中位数为mvp
         // 这里预测的依据完全听过intra帧内相邻块得到
+        // 这里值得注意的是mvp保存的是精确到1/4像素的向量,结论来自x264_me_search_ref中的使用方式
         x264_mb_predict_mv_16x16( h, 0, i_ref, m.mvp );
 
         if( h->mb.ref_blind_dupe == i_ref )

@@ -35,7 +35,7 @@ typedef struct
     /* aligning the first member is a gcc hack to force the struct to be aligned,
      * as well as force sizeof(struct) to be a multiple of the alignment. */
     /* input */
-    ALIGNED_64( int i_pixel );   /* PIXEL_WxH */
+    ALIGNED_64( int i_pixel );   /* PIXEL_WxH */ //实际上是各种类型的子宏块的宽和高的序号, 根据这个可查到各种子宏块的宽高例如 x264_pixel_size[m->i_pixel].w
     uint16_t *p_cost_mv; /* lambda * nbits for each possible mv */
     int      i_ref_cost;
     int      i_ref;

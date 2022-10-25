@@ -179,6 +179,7 @@ do\
 #define SPEL(mv) ((mv)*4)      /* ... and the reverse. */
 #define SPELx2(mv) (SPEL(mv)&0xFFFCFFFC) /* for two packed MVs */
 
+// 解析参考链接:https://blog.csdn.net/fanbird2008/article/details/30075187
 void x264_me_search_ref( x264_t *h, x264_me_t *m, int16_t (*mvc)[2], int i_mvc, int *p_halfpel_thresh )
 {
     const int bw = x264_pixel_size[m->i_pixel].w;
@@ -189,53 +190,123 @@ void x264_me_search_ref( x264_t *h, x264_me_t *m, int16_t (*mvc)[2], int i_mvc, 
     int bmx, bmy, bcost = COST_MAX;
     int bpred_cost = COST_MAX;
     int omx, omy, pmx, pmy;
-    pixel *p_fenc = m->p_fenc[0];
-    pixel *p_fref_w = m->p_fref_w;
+    pixel *p_fenc = m->p_fenc[0];// 指向待编码帧的Y平面(亮度)
+    pixel *p_fref_w = m->p_fref_w;// 指向参考帧的的Y平面(亮度)
+
+    // 声明堆栈变量 pixel pix[16 * 16]， 并且32字节对齐
     ALIGNED_ARRAY_32( pixel, pix,[16*16] );
+
+    // 声明堆栈变量 int16_t mvc_temp[16][2], 并且8字节对齐
     ALIGNED_ARRAY_8( int16_t, mvc_temp,[16],[2] );
 
+    // 声明堆栈变量 int costs[16], 并且16字节对齐
     ALIGNED_ARRAY_16( int, costs,[16] );
 
+    // mv_limit_fpel 是一个 2x2 的 数组， 存放着整像素运动矢量搜索范围， min_x, min_y, max_x, max_y
     int mv_x_min = h->mb.mv_limit_fpel[0][0];
     int mv_y_min = h->mb.mv_limit_fpel[0][1];
     int mv_x_max = h->mb.mv_limit_fpel[1][0];
     int mv_y_max = h->mb.mv_limit_fpel[1][1];
+
+// 首先定义两个用来检查mv是否超出范围的宏
 /* Special version of pack to allow shortcuts in CHECK_MVRANGE */
+// pack16to32_mask2 主要是将两个整数分别放入高16位和低16位， 组合成一个32位的整数
 #define pack16to32_mask2(mx,my) (((uint32_t)(mx)<<16)|((uint32_t)(my)&0x7FFF))
     uint32_t mv_min = pack16to32_mask2( -mv_x_min, -mv_y_min );
     uint32_t mv_max = pack16to32_mask2( mv_x_max, mv_y_max )|0x8000;
     uint32_t pmv, bpred_mv = 0;
 
+// CHECK_MVRANGE这个宏主要是检测mv有没有超出边界范围,如果超出则不为0
+// 这个宏很巧妙， 它将检查mx, my 是否超过了搜索范围
+// 具体是， 如果mx, my有一个溢出， 其 or 运算的两边至少有一个的高位为1
+// 从而将导致其or的结果与0x80004000进行与运算得到的结果不为0
 #define CHECK_MVRANGE(mx,my) (!(((pack16to32_mask2(mx,my) + mv_min) | (mv_max - pack16to32_mask2(mx,my))) & 0x80004000))
 
+    // a->p_cost_mv = h->cost_mv[a->i_qp] 见 x264_mb_analyse_load_costs
+    // h->cost_mv 初始化， 见 x264_analyse_init_costs
+    // m->p_cost_mv = a->p_cost_mv 见宏定义 LOAD_FUNC
+    // [question]这个相减还真有点费解， 一个是地址， 一个是预测运动向量
     const uint16_t *p_cost_mvx = m->p_cost_mv - m->mvp[0];
     const uint16_t *p_cost_mvy = m->p_cost_mv - m->mvp[1];
 
     /* Try extra predictors if provided.  If subme >= 3, check subpel predictors,
      * otherwise round them to fullpel. */
+
+    // 详细参数解析:https://zhuanlan.zhihu.com/p/473593903
+    // i_subpel_refine是外部输入参数subme的代码化变量,是用来控制编码策略的
+    // 不过从x264源码里面的实现来看，它不仅可以设置子像素运动估计过程的计算复杂度，
+    // 还可以决定编码器整个参数选择过程的复杂度，是否使用RDO，从而影响x264视频编码器的压缩性能和编码速度。
+    // 目前subme可配置的取值范围[0,11]，默认值是7，对应medium preset。
+    // 按照官方的代码注释信息来看，subme的值具体会影响到x264编码器的运动估计和模式决策以及QP决策，
+    // 而这三个模块正好是视频编码器算法优化的关键所在，也是RDO率失真优化过程应用最多的模块。
+    // (注:此处RDO指的是用原始和重建像素块SSD作为失真指标)
+
+    // i_subpel_refine动态预测和分区方式，可选项1~7，默认5(与压缩质量和时间关系密切，1是7速度的四倍以上)
+    // 1:用全像素块进行动态搜索，对每个块再用快速模式进行四分之一像素块精确搜索
+    // 2:用半像素块进行动态搜索，对每个块再用快速模式进行四分之一像素块精确搜索
+    // 3:用半像素块进行动态搜索，对每个块再用质量模式进行四分之一像素块精确搜索
+    // 4:用快速模式进行四分之一像素块精确搜索
+    // 5:用质量模式进行四分之一像素块精确搜索
+    // 6:进行I、P帧像素块的速率失真最优化(rdo)
+    // 7:进行I、P帧运动矢量及块内部的速率失真最优化(质量最好)
+    // 8~9:会使用RDO进行最佳MV的搜索。
+    // 10:会对QP进行RDO搜索确定最佳值。
+
     if( h->mb.i_subpel_refine >= 3 )
     {
+        // 第一优先级是计算mvp方向
+
+        // 需要进行 1/4 像素插值
         /* Calculate and check the MVP first */
+       
+        // SPEL 是半像素 FPEL是全像素
+        // SPEL 将整像素坐标转换为 1/4 像素坐标
+        // 一个整数的低两位表示1/4像素坐标
+        // SPEL 将实参左移两位， 即将原来的坐标乘以 4，
+        // 比如：0 1 两个相邻的像素变成了0, 4, 其中空出来的1, 2, 3
+        // 就对应着 1/4  1/2  3/4 像素位
+        // 而 FPEL 将实参右移两位， 获得整像素位坐标
+        // 即将原来放大了的整像素坐标还原
+        // 从下面的程序来看， mvp保存的是1/4像素坐标
         int bpred_mx = x264_clip3( m->mvp[0], SPEL(mv_x_min), SPEL(mv_x_max) );
         int bpred_my = x264_clip3( m->mvp[1], SPEL(mv_y_min), SPEL(mv_y_max) );
         pmv = pack16to32_mask( bpred_mx, bpred_my );
+
+        //起点加上mvp得到目标宏块为之后后, 将预测目标宏块的坐标在转化为整像素坐标
         pmx = FPEL( bpred_mx );
         pmy = FPEL( bpred_my );
 
+        // 见 COST_MV_HPEL，对参考平面之参考宏块进行1/4 像素预插值
+        // 并求编码宏块和参考宏块整像素的SAD（绝对差之和）
+        // i_sum += abs( pix1[x] - pix2[x] );
+
         COST_MV_HPEL( bpred_mx, bpred_my, bpred_cost );
         int pmv_cost = bpred_cost;
+        // 将得到的预测运动向量的代价赋值给pmv_cost
+
+        // 第二优先级是计算mvc方向
 
         if( i_mvc > 0 )
         {
+            // 下面的英文注释已经表达的很清楚了，这翻译一下
+            // 裁减候选的运动向量，除掉那些 0 向量 或 等于 pmv (mvp) 的向量 因为mvp已经计算过了
+            // 并将裁减结果放在mvc_temp[2]及之后处
             /* Clip MV candidates and eliminate those equal to zero and pmv. */
             int valid_mvcs = x264_predictor_clip( mvc_temp+2, mvc, i_mvc, h->mb.mv_limit_fpel, pmv );
+            // 对其他候选向量进行处理
             if( valid_mvcs > 0 )
             {
                 int i = 1, cost;
                 /* We stuff pmv here to branchlessly pick between pmv and the various
                  * MV candidates. [0] gets skipped in order to maintain alignment for
                  * x264_predictor_clip. */
+
+                // mvc_temp[0] 空着， 为了维护对齐
+                // mvc_temp[1] 存放 pmv
+
                 M32( mvc_temp[1] ) = pmv;
+
+                //计算每一个mvc的cost,找到最佳的
                 bpred_cost <<= 4;
                 do
                 {
@@ -244,6 +315,8 @@ void x264_me_search_ref( x264_t *h, x264_me_t *m, int16_t (*mvc)[2], int i_mvc, 
                     COST_MV_HPEL( mx, my, cost );
                     COPY1_IF_LT( bpred_cost, (cost << 4) + i );
                 } while( ++i <= valid_mvcs );
+
+                // 确定最终的预测运动向量
                 bpred_mx = mvc_temp[(bpred_cost&15)+1][0];
                 bpred_my = mvc_temp[(bpred_cost&15)+1][1];
                 bpred_cost >>= 4;
@@ -252,9 +325,11 @@ void x264_me_search_ref( x264_t *h, x264_me_t *m, int16_t (*mvc)[2], int i_mvc, 
 
         /* Round the best predictor back to fullpel and get the cost, since this is where
          * we'll be starting the fullpel motion search. */
+        // 从1/4像素坐标得到整像素坐标，因为我们将开始整像素运动搜索
         bmx = FPEL( bpred_mx );
         bmy = FPEL( bpred_my );
         bpred_mv = pack16to32_mask(bpred_mx, bpred_my);
+        // 预测运动向量是 1/4 像素坐标，即是1/4像素预测(包括1/4, 2/4, 3/4)
         if( bpred_mv&0x00030003 ) /* Only test if the tested predictor is actually subpel... */
             COST_MV( bmx, bmy );
         else                          /* Otherwise just copy the cost (we already know it) */
@@ -342,7 +417,7 @@ void x264_me_search_ref( x264_t *h, x264_me_t *m, int16_t (*mvc)[2], int i_mvc, 
             break;
         }
 
-        case X264_ME_HEX:
+        case X264_ME_HEX: //六边形搜索
         {
     me_hex2:
             /* hexagon search, radius 2 */

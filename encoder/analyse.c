@@ -1313,6 +1313,9 @@ static void mb_analyse_inter_p16x16( x264_t *h, x264_mb_analysis_t *a )
         }
 
         /* save mv for predicting neighbors */
+        // [question]找到的最佳mv保存起来作为重要的生成mvc与mvp的参考, 数据结构还没有很清晰, 待确认
+        // 数据结构解析 ALIGNED_8( int16_t mvc[32][6][2] );
+        // [ref][0] is 16x16 mv, [ref][1..4] are 8x8 mv from partition [0..3], [ref][5] is for alignment
         CP32( h->mb.mvr[0][i_ref][h->mb.i_mb_xy], m.mv );
         CP32( a->l0.mvc[i_ref][0], m.mv );
 
@@ -1328,8 +1331,10 @@ static void mb_analyse_inter_p16x16( x264_t *h, x264_mb_analysis_t *a )
               + abs(m.mv[1]-h->mb.cache.pskip_mv[1]) <= 1
             && x264_macroblock_probe_pskip( h ) )
         {//如果探测成功
-            h->mb.i_type = P_SKIP;//设置宏块类型
-            analyse_update_cache( h, a );//更新当前宏块编码相关信息
+            h->mb.i_type = P_SKIP;// 设置宏块类型
+            // 更新当前宏块编码相关信息
+            // [question]更新x264_mb_analysis_t里面的相关信息同步到x264_t*,具体细节需要再研究
+            analyse_update_cache( h, a );
             assert( h->mb.cache.pskip_mv[1] <= h->mb.mv_max_spel[1] || h->i_thread_frames == 1 );
             return;
         }
@@ -1341,16 +1346,18 @@ static void mb_analyse_inter_p16x16( x264_t *h, x264_mb_analysis_t *a )
             h->mc.memcpy_aligned( &a->l0.me16x16, &m, sizeof(x264_me_t) );
     }
 
+    // 存储引用帧的id, i_ref
     x264_macroblock_cache_ref( h, 0, 0, 4, 4, 0, a->l0.me16x16.i_ref );
     assert( a->l0.me16x16.mv[1] <= h->mb.mv_max_spel[1] || h->i_thread_frames == 1 );
 
-    h->mb.i_type = P_L0;
+    h->mb.i_type = P_L0; // 个人理解是不满足P_SKIP要求但是可以用过P帧预测的,被标记为P_L0
     if( a->i_mbrd )
     {
         mb_init_fenc_cache( h, a->i_mbrd >= 2 || h->param.analyse.inter & X264_ANALYSE_PSUB8x8 );
         if( a->l0.me16x16.i_ref == 0 && M32( a->l0.me16x16.mv ) == M32( h->mb.cache.pskip_mv ) && !a->b_force_intra )
         {
             h->mb.i_partition = D_16x16;
+            // 存储当前mb宏块在i_ref帧的运动向量的指针a->l0.me16x16.mv
             x264_macroblock_cache_mv_ptr( h, 0, 0, 4, 4, 0, a->l0.me16x16.mv );
             a->l0.i_rd16x16 = rd_cost_mb( h, a->i_lambda2 );
             if( !(h->mb.i_cbp_luma|h->mb.i_cbp_chroma) )

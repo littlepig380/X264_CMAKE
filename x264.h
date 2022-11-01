@@ -25,6 +25,10 @@
  * For more information, contact us at licensing@x264.com.
  *****************************************************************************/
 
+// 相关名词收集整理以便理解代码
+// 拉格朗日率失真优化（RDO, Rate Distortion Optimization）
+// 差值平方和（SSD，Sum of Squared Difference）
+
 #ifndef X264_X264_H
 #define X264_X264_H
 

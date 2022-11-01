@@ -460,9 +460,9 @@ struct x264_t
         int     i_b4_xy;
 
         /* Search parameters */
-        int     i_me_method;
-        int     i_subpel_refine;
-        int     b_chroma_me;
+        int     i_me_method; // 运动估计算法
+        int     i_subpel_refine; // 亚像素运动估计质量
+        int     b_chroma_me; // 亚像素色度运动估计和P帧的模式选择
         int     b_trellis;
         int     b_noise_reduction;
         int     b_dct_decimate;
@@ -493,7 +493,7 @@ struct x264_t
         unsigned int i_neighbour;
         unsigned int i_neighbour8[4];       /* neighbours of each 8x8 or 4x4 block that are available */
         unsigned int i_neighbour4[16];      /* at the time the block is coded */
-        unsigned int i_neighbour_intra;     /* for constrained intra pred */
+        unsigned int i_neighbour_intra;     /* for constrained intra pred */ //这个参数反映相邻宏块采用的帧内预测模式类别
         unsigned int i_neighbour_frame;     /* ignoring slice boundaries */
         int     i_mb_type_top;
         int     i_mb_type_left[2];
@@ -682,7 +682,7 @@ struct x264_t
             pixel *p_fenc_plane[3];
 
             /* pointer over mb of the frame to be reconstructed  */
-            pixel *p_fdec[3];
+            pixel *p_fdec[3]; /* y,u,v */
 
             /* pointer over mb of the references */
             int i_fref[2];

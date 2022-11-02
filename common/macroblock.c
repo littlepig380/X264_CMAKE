@@ -856,6 +856,7 @@ static ALWAYS_INLINE void macroblock_cache_load_neighbours( x264_t *h, int mb_x,
 
 static ALWAYS_INLINE void macroblock_cache_load( x264_t *h, int mb_x, int mb_y, int b_mbaff )
 {
+    // 加载不同尺寸相邻宏块的引用信息, 用于预测当前宏块
     macroblock_cache_load_neighbours( h, mb_x, mb_y, b_mbaff );
 
     int *left = h->mb.i_mb_left_xy;
@@ -863,8 +864,8 @@ static ALWAYS_INLINE void macroblock_cache_load( x264_t *h, int mb_x, int mb_y, 
     int top_y = h->mb.i_mb_top_y;
     int s8x8 = h->mb.i_b8_stride;
     int s4x4 = h->mb.i_b4_stride;
-    int top_8x8 = (2*top_y+1) * s8x8 + 2*mb_x;
-    int top_4x4 = (4*top_y+3) * s4x4 + 4*mb_x;
+    int top_8x8 = (2*top_y+1) * s8x8 + 2*mb_x; //正上方8*8宏块的偏移位置
+    int top_4x4 = (4*top_y+3) * s4x4 + 4*mb_x; //正上方4*4宏块的偏移位置
     int lists = (1 << h->sh.i_type) & 3;
 
     /* GCC pessimizes direct loads from heap-allocated arrays due to aliasing. */

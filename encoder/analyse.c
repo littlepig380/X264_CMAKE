@@ -542,6 +542,7 @@ static ALWAYS_INLINE const int8_t *predict_chroma_mode_available( int i_neighbou
     return chroma_mode_available[idx];
 }
 
+// [question]如何通过相应的宏块来预测当前宏块的帧内模式还没有搞懂, 需要结合macroblock_cache_load_neighbours函数来分析
 static ALWAYS_INLINE const int8_t *predict_8x8_mode_available( int force_intra, int i_neighbour, int i )
 {
     int avoid_topright = force_intra && (i&1);
@@ -670,11 +671,22 @@ static void mb_analyse_intra_chroma( x264_t *h, x264_mb_analysis_t *a )
 
 /* FIXME: should we do any sort of merged chroma analysis with 4:4:4? */
 // 功能：帧内预测:从16x16的SAD,4个8x8的SAD和，16个4x4SAD中选出最优方式
+// 参考解析链接: https://blog.csdn.net/weixin_34018202/article/details/90657027?spm=1001.2101.3001.6650.1&utm_medium=distribute.pc_relevant.none-task-blog-2%7Edefault%7ECTRLIST%7ERate-1-90657027-blog-110261330.pc_relevant_3mothn_strategy_and_data_recovery&depth_1-utm_source=distribute.pc_relevant.none-task-blog-2%7Edefault%7ECTRLIST%7ERate-1-90657027-blog-110261330.pc_relevant_3mothn_strategy_and_data_recovery&utm_relevant_index=2
+// H.264采用拉格朗日率失真优化（Rate Distortion Optimization, RDO）策略进行最优化编码模式选择，通过遍历所有可能的编码模式，最后选择最小率失真代价模式作为最佳帧内预测模式。具体的编码模式选择过程概述如下：
+// （1）、计算当前4*4块和重建的4*4块之间的差值平方和（SSD，Sum of Squared Difference）以及编码的比特率；
+// （2）、计算9种帧内模式的率失真值；
+// （3）、选择具有最小率失真值的模式作为最佳4*4帧内预测模式；
+// （4）、对宏块内的16个4*4块重复上述（1）~（3），获得每一个4*4块的最佳预测模式和相应的最小率失真值；
+// （5）、累加计算得出16个块的最小率失真值，得到当前宏块的4*4帧内预测率失真值；
+// （6）、按照类似的方法，分别计算当前16*16大小宏块在4种模式下的宏块率失真值，选取宏块率失真最小的模式作为最佳帧内16*16预测模式；
+// （7）、根据（5）和（6）中的最小率失真值，选取亮度宏块采用4*4或16*16帧内预测模式；
+// （8）、8*8色度宏块的帧内预测模式与亮度类似。
+// 在基本档次下，以色度模式为外循环，依次扫描亮度模式，搜索的总数是4*（9*16+4）=592次，获得的最优的帧内预测模式的计算量非常大。
 static void mb_analyse_intra( x264_t *h, x264_mb_analysis_t *a, int i_satd_inter )
 {
     const unsigned int flags = h->sh.i_type == SLICE_TYPE_I ? h->param.analyse.intra : h->param.analyse.inter;
-    pixel *p_src = h->mb.pic.p_fenc[0];// p_fenc是当前编码帧
-    pixel *p_dst = h->mb.pic.p_fdec[0];// p_fdec是重建参考帧
+    pixel *p_src = h->mb.pic.p_fenc[0];// p_fenc是当前编码帧  #define FENC_STRIDE 16 16整数行排列 紧凑
+    pixel *p_dst = h->mb.pic.p_fdec[0];// p_fdec是重建参考帧  #define FDEC_STRIDE 32 32整数行排列 非紧凑
     static const int8_t intra_analysis_shortcut[2][2][2][5] = //预测模式组合,用于跳过一些预测模式
     {
         {{{I_PRED_4x4_HU, -1, -1, -1, -1},
@@ -689,7 +701,6 @@ static void mb_analyse_intra( x264_t *h, x264_mb_analysis_t *a, int i_satd_inter
 
     int idx;
     int lambda = a->i_lambda; // 用于计算RDO cost的参数
-    // H.264采用拉格朗日率失真优化（Rate Distortion Optimization, RDO）策略进行最优化编码模式选择
 
     /*---------------- Try all mode and calculate their score ---------------*/
     /* Disabled i16x16 for AVC-Intra compat */
@@ -704,9 +715,12 @@ static void mb_analyse_intra( x264_t *h, x264_mb_analysis_t *a, int i_satd_inter
         //fast intra, 提前结束的阈值, 如果fast intra,阈值就是和b_fast_intra, 反之就是最大COST,最终还是通过i_subpel_refine(subme)来定
         int i16x16_thresh = a->b_fast_intra ? (i16x16_thresh_lut[h->mb.i_subpel_refine]*i_satd_inter)>>1 : COST_MAX;
 
-        if( !h->mb.b_lossless && predict_mode[3] >= 0 ) //至少有4个模式是有效的, 16x16只有4种模式
+        if( !h->mb.b_lossless && predict_mode[3] >= 0 ) //如果相邻块的预测模式中至少有4个模式是有效的, 16x16只有4种模式
         {
-           h->pixf.intra_mbcmp_x3_16x16( p_src, p_dst, a->i_satd_i16x16_dir );
+            // 一次性计算模式0~2的satd
+            h->pixf.intra_mbcmp_x3_16x16( p_src, p_dst, a->i_satd_i16x16_dir );
+            // 计算完成后还要加上lambda的校正项
+            // 详细参考: https://blog.csdn.net/qq_36069590/article/details/87889083
             a->i_satd_i16x16_dir[0] += lambda * bs_size_ue(0);
             a->i_satd_i16x16_dir[1] += lambda * bs_size_ue(1);
             a->i_satd_i16x16_dir[2] += lambda * bs_size_ue(2);
@@ -715,34 +729,81 @@ static void mb_analyse_intra( x264_t *h, x264_mb_analysis_t *a, int i_satd_inter
             COPY2_IF_LT( a->i_satd_i16x16, a->i_satd_i16x16_dir[2], a->i_predict16x16, 2 );
 
             /* Plane is expensive, so don't check it unless one of the previous modes was useful. */
+			// 模式3：平面（这个操作比较消耗算力, 个人理解代码是除非上述0~2模式有至少一个有效,否则不计算, 也就是在0~2都失效的情况不计算）
+            // [question]这里存疑, 需要仔细推敲是否是平面模式的计算
             if( a->i_satd_i16x16 <= i16x16_thresh )
             {
-                h->predict_16x16[I_PRED_16x16_P]( p_dst );
+                h->predict_16x16[I_PRED_16x16_P]( p_dst ); // 在p_dst(实际上就是p_fdec这块buff上面)将预测模式的像素全部构造出来
                 a->i_satd_i16x16_dir[I_PRED_16x16_P] = h->pixf.mbcmp[PIXEL_16x16]( p_src, FENC_STRIDE, p_dst, FDEC_STRIDE );
                 a->i_satd_i16x16_dir[I_PRED_16x16_P] += lambda * bs_size_ue(3);
                 COPY2_IF_LT( a->i_satd_i16x16, a->i_satd_i16x16_dir[I_PRED_16x16_P], a->i_predict16x16, 3 );
             }
         }
-        else //如果不是都可以用, 那就逐个比较
+        else
         {
+            //如果不是都可以用, 那就逐个比较
+            //遍历所有的可用的Intra16x16帧内预测模式  
+            //最多4种
             for( ; *predict_mode >= 0; predict_mode++ )
             {
                 int i_satd;
                 int i_mode = *predict_mode;
 
+				//帧内预测汇编函数：根据左边和上边的像素计算出预测值
+				/* 
+                 * 帧内预测举例 
+                 * Vertical预测方式 
+                 *    |X1 X2 ... X16 
+                 *  --+--------------- 
+                 *    |X1 X2 ... X16 
+                 *    |X1 X2 ... X16 
+                 *    |.. .. ... X16 
+                 *    |X1 X2 ... X16 
+                 * 
+                 * Horizontal预测方式 
+                 *    | 
+                 *  --+--------------- 
+                 *  X1| X1  X1 ...  X1 
+                 *  X2| X2  X2 ...  X2 
+                 *  ..| ..  .. ...  .. 
+                 * X16|X16 X16 ... X16 
+                 * 
+                 * DC预测方式 
+                 *    |X1 X2 ... X16 
+                 *  --+--------------- 
+                 * X17| 
+                 * X18|     Y 
+                 *  ..| 
+                 * X32| 
+                 * 
+                 * Y=(X1+X2+X3+X4+...+X31+X32)/32 
+                 * 
+                 */
+
                 if( h->mb.b_lossless )
                     x264_predict_lossless_16x16( h, 0, i_mode );
                 else
-                    h->predict_16x16[i_mode]( p_dst );
+                    h->predict_16x16[i_mode]( p_dst ); // 16*16亮度预测模式,计算结果存储在p_dst重建帧中
 
+				//计算SAD或者是SATD（SATD(transformed)是经过Hadamard变换之后的SAD）  
+                //即编码代价  
+                //数据位于p_dst和p_src
                 i_satd = h->pixf.mbcmp[PIXEL_16x16]( p_src, FENC_STRIDE, p_dst, FDEC_STRIDE ) +
                          lambda * bs_size_ue( x264_mb_pred_mode16x16_fix[i_mode] ); // 选择satd残差最小的作为最佳匹配结果
                 COPY2_IF_LT( a->i_satd_i16x16, i_satd, a->i_predict16x16, i_mode );
+                //COPY2_IF_LT()函数的意思是“copy if little”。即如果值更小（代价更小），就拷贝。
+                //宏定义展开后如下所示
+                //if((i_satd)<(a->i_satd_i16x16))
+                //{
+                //    (a->i_satd_i16x16)=(i_satd);
+                //    (a->i_predict16x16)=(i_mode);
+                //}
                 a->i_satd_i16x16_dir[i_mode] = i_satd;
+                // 每种模式的代价都会存储
             }
         }
 
-        if( h->sh.i_type == SLICE_TYPE_B )
+        if( h->sh.i_type == SLICE_TYPE_B ) // 如果是B片还需要加一个cost的校正参量
             /* cavlc mb type prefix */
             a->i_satd_i16x16 += lambda * i_mb_b_cost_table[I_16x16];
 
@@ -752,6 +813,7 @@ static void mb_analyse_intra( x264_t *h, x264_mb_analysis_t *a, int i_satd_inter
 
     uint16_t *cost_i4x4_mode = h->cost_table->i4x4_mode[a->i_qp] + 8;
     /* 8x8 prediction selection */
+	//帧内（I帧）8x8
     if( flags & X264_ANALYSE_I8x8 )
     {
         ALIGNED_ARRAY_32( pixel, edge,[36] );
@@ -767,19 +829,72 @@ static void mb_analyse_intra( x264_t *h, x264_mb_analysis_t *a, int i_satd_inter
 
         for( idx = 0;; idx++ )
         {
+            // 实际上就是将0~3 转化为(0,0) (1,0) (0,1) (1,1)
             int x = idx&1;
             int y = idx>>1;
+
+            // 按照8*8的单位偏移到相应的数据位
             pixel *p_src_by = p_src + 8*x + 8*y*FENC_STRIDE;
             pixel *p_dst_by = p_dst + 8*x + 8*y*FDEC_STRIDE;
-            int i_best = COST_MAX;
-            int i_pred_mode = x264_mb_predict_intra4x4_mode( h, 4*idx );
 
+            int i_best = COST_MAX;
+
+            // 将当前16*16宏块分成4个8*8的宏块, 取每一个8*8的宏块的第一个4*4会获取周围的帧内预测结果
+            int i_pred_mode = x264_mb_predict_intra4x4_mode( h, 4*idx );
+            /* Scan8 organization:
+             *    0 1 2 3 4 5 6 7
+             * 0  DY    y y y y y
+             * 1        y Y Y Y Y
+             * 2        y Y Y Y Y
+             * 3        y Y Y Y Y
+             * 4        y Y Y Y Y
+             * 5  DU    u u u u u
+             * 6        u U U U U
+             * 7        u U U U U
+             * 8        u U U U U
+             * 9        u U U U U
+             * 10 DV    v v v v v
+             * 11       v V V V V
+             * 12       v V V V V
+             * 13       v V V V V
+             * 14       v V V V V
+             * DY/DU/DV are for luma/chroma DC.
+             */
+
+            // 对于8x8的宏块， idx = 0, 1, 2, 3
+            // 对于idx = 1, 传入参数为idx = idx * 4 = 4,（如上）
+            // x264_scan8[4] = 6 + 1 * 8,
+            // 上述的Y便表示为一个4x4块
+            // idx = 1表示第二个8x8块，其刚好对应
+            // 着第三个4x4块， 即scan8 layout中的
+            // 第一行第六列
+
+            // 对于idx = 2, 传入参数为idx = idx * 4 = 8,
+            // x264_scan8[8] = 4 + 3 * 8,
+            // 上述的Y便表示为一个4x4块
+            // idx = 2表示第三个8x8块，其刚好对应
+            // 着第9个4x4块， 即scan8 layout中的
+            // 第三行第四列
+
+            // 对于idx = 3, 传入参数为idx = idx * 4 = 12,
+            // x264_scan8[12] = 6 + 3 * 8,
+            // 上述的Y便表示为一个4x4块
+            // idx = 3表示第四个8x8块，其刚好对应
+            // 着第11个4x4块， 即scan8 layout中的
+            // 第三行第六列
+
+            // 所以x264_scan8[idx] - 1表示其左边的宏块
+            // x264_scan8[idx] - 8便是其顶部的宏块，
+            // 两者都是以4x4宏块为计量单位的。
+
+            // 再从8*8的角度取周边宏块的帧内预测信息做当前8*8的预测
             const int8_t *predict_mode = predict_8x8_mode_available( a->b_avoid_topright, h->mb.i_neighbour8[idx], idx );
             h->predict_8x8_filter( p_dst_by, edge, h->mb.i_neighbour8[idx], ALL_NEIGHBORS );
 
             if( h->pixf.intra_mbcmp_x9_8x8 && predict_mode[8] >= 0 )
             {
                 /* No shortcuts here. The SSSE3 implementation of intra_mbcmp_x9 is fast enough. */
+                // 这里没有捷径。intra_mbcmp_x9的SSSE3实现已经足够快了。
                 i_best = h->pixf.intra_mbcmp_x9_8x8( p_src_by, p_dst_by, edge, cost_i4x4_mode-i_pred_mode, a->i_satd_i8x8_dir[idx] );
                 i_cost += i_best & 0xffff;
                 i_best >>= 16;

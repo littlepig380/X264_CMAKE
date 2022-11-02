@@ -447,8 +447,8 @@ struct x264_t
 
         /* Strides */
         int     i_mb_stride;
-        int     i_b8_stride;
-        int     i_b4_stride;
+        int     i_b8_stride; // --得到以8*8宏块作为粒度的宏块宽度
+        int     i_b4_stride; // --得到以4*4宏块作为粒度的宏块宽度
         int     left_b8[2];
         int     left_b4[2];
 
@@ -490,10 +490,10 @@ struct x264_t
 
         /* neighboring MBs */
         // [question]疑似记录当前正在编码宏块周围的相邻宏块的信息
-        unsigned int i_neighbour;
+        unsigned int i_neighbour; //
         unsigned int i_neighbour8[4];       /* neighbours of each 8x8 or 4x4 block that are available */
-        unsigned int i_neighbour4[16];      /* at the time the block is coded */
-        unsigned int i_neighbour_intra;     /* for constrained intra pred */ //这个参数反映相邻宏块采用的帧内预测模式类别
+        unsigned int i_neighbour4[16];      /* at the time the block is coded */ // 各种4*4 8*8 16*16相邻宏块采用的帧内预测模式类别
+        unsigned int i_neighbour_intra;     /* for constrained intra pred */
         unsigned int i_neighbour_frame;     /* ignoring slice boundaries */
         int     i_mb_type_top;
         int     i_mb_type_left[2];
@@ -501,10 +501,10 @@ struct x264_t
         int     i_mb_type_topright;
         int     i_mb_prev_xy;
         int     i_mb_left_xy[2];
-        int     i_mb_top_xy; // 实际上这些都是相邻宏块编号,根据位置变化而变化
-        int     i_mb_topleft_xy;
+        int     i_mb_top_xy; // i_mb_xy = i_mb_y * h->mb.i_mb_stride + i_mb_x; 得到MB相对于当前帧起始宏块的偏移位置(以宏块为单位)，其中h->mb.i_mb_stride为原始数据以MB为单位的宽度
+        int     i_mb_topleft_xy; // --得到当前MB上一个MB的宏块偏移
         int     i_mb_topright_xy;
-        int     i_mb_top_y;
+        int     i_mb_top_y; // --得到当前MB上一个MB的Y坐标
         int     i_mb_topleft_y;
         int     i_mb_topright_y;
         const x264_left_table_t *left_index_table;
@@ -911,6 +911,7 @@ struct x264_t
     uint8_t (*deblock_strength[2])[2][8][4];
 
     /* CPU functions dependents */
+    // 将预测模式的像素全部构造出来的实现函数
     x264_predict_t      predict_16x16[4+3];
     x264_predict8x8_t   predict_8x8[9+3];
     x264_predict_t      predict_4x4[9+3];

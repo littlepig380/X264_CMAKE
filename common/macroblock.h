@@ -419,8 +419,8 @@ static ALWAYS_INLINE uint64_t pack32to64( uint32_t a, uint32_t b )
 
 static ALWAYS_INLINE int x264_mb_predict_intra4x4_mode( x264_t *h, int idx )
 {
-    const int ma = h->mb.cache.intra4x4_pred_mode[x264_scan8[idx] - 1];
-    const int mb = h->mb.cache.intra4x4_pred_mode[x264_scan8[idx] - 8];
+    const int ma = h->mb.cache.intra4x4_pred_mode[x264_scan8[idx] - 1]; // 获取当前宏块左边的宏块的帧内预测类型
+    const int mb = h->mb.cache.intra4x4_pred_mode[x264_scan8[idx] - 8]; // 获取当前宏块上边的宏块的帧内预测类型
     const int m  = X264_MIN( x264_mb_pred_mode4x4_fix(ma),
                              x264_mb_pred_mode4x4_fix(mb) );
 

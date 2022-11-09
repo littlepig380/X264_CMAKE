@@ -156,7 +156,7 @@ typedef struct
     x264_pps_t *pps;
 
     int i_type;
-    int i_first_mb;
+    int i_first_mb; // 当前slice(而不是frame)的第一个宏块idx
     int i_last_mb;
 
     int i_pps_id;
@@ -490,17 +490,17 @@ struct x264_t
 
         /* neighboring MBs */
         // [question]疑似记录当前正在编码宏块周围的相邻宏块的信息
-        unsigned int i_neighbour; //
+        unsigned int i_neighbour; // 所属slice当中的相邻关系记录
         unsigned int i_neighbour8[4];       /* neighbours of each 8x8 or 4x4 block that are available */
         unsigned int i_neighbour4[16];      /* at the time the block is coded */ // 各种4*4 8*8 16*16相邻宏块采用的帧内预测模式类别
         unsigned int i_neighbour_intra;     /* for constrained intra pred */
-        unsigned int i_neighbour_frame;     /* ignoring slice boundaries */
+        unsigned int i_neighbour_frame;     /* ignoring slice boundaries */ //超越slice边界,在整个frame中的相邻关系记录
         int     i_mb_type_top;
         int     i_mb_type_left[2];
         int     i_mb_type_topleft;
         int     i_mb_type_topright;
         int     i_mb_prev_xy;
-        int     i_mb_left_xy[2];
+        int     i_mb_left_xy[2]; // 表示在以宏块为单位的列表中侧相邻宏块, 注意这里左侧相邻总共有两个, 0为左侧靠上, 1为左侧靠下(这里区别于左上/左下), 左侧靠下应该只有b_mbaff==1的时候存在
         int     i_mb_top_xy; // i_mb_xy = i_mb_y * h->mb.i_mb_stride + i_mb_x; 得到MB相对于当前帧起始宏块的偏移位置(以宏块为单位)，其中h->mb.i_mb_stride为原始数据以MB为单位的宽度
         int     i_mb_topleft_xy; // --得到当前MB上一个MB的宏块偏移
         int     i_mb_topright_xy;
@@ -533,7 +533,7 @@ struct x264_t
         int16_t (*mvr[2][X264_REF_MAX*2])[2];/* 16x16 mv for each possible ref */
         int8_t  *skipbp;                    /* block pattern for SKIP or DIRECT (sub)mbs. B-frames + cabac only */
         int8_t  *mb_transform_size;         /* transform_size_8x8_flag of each mb */
-        int32_t *slice_table;               /* sh->first_mb of the slice that the indexed mb is part of */
+        int32_t *slice_table;               /* sh->first_mb of the slice that the indexed mb is part of */ //个人理解是用来查找当前宏块所在的slice的第一个宏块的idx, 存疑
         uint8_t *field;
 
          /* buffer for weighted versions of the reference frames */
@@ -843,7 +843,7 @@ struct x264_t
         int16_t dist_scale_factor_buf[2][2][X264_REF_MAX*2][4];
         int16_t (*dist_scale_factor)[4];
         int8_t bipred_weight_buf[2][2][X264_REF_MAX*2][4];
-        int8_t (*bipred_weight)[4];
+        int8_t (*bipred_weight)[4]; //[question]看样子是双向预测权重,存疑
         /* maps fref1[0]'s ref indices into the current list0 */
 #define map_col_to_list0(col) h->mb.map_col_to_list0[(col)+2]
         int8_t  map_col_to_list0[X264_REF_MAX+2];

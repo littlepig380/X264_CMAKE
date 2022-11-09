@@ -2879,10 +2879,11 @@ static intptr_t slice_write( x264_t *h )
 	    //（3）加载参考帧序号ref[]和运动矢量mv[]缓存Cache的宏块周边信息。加载顺序为：左上->上->左。
 	    //（4）加载其它信息。
         /* load cache */
+        // 这里是否有mbaff宏块级帧场自适应事区别对待的, 具体看看x264.h中关于这个名词的相关注释
         if( SLICE_MBAFF )
-            x264_macroblock_cache_load_interlaced( h, i_mb_x, i_mb_y );
+            x264_macroblock_cache_load_interlaced( h, i_mb_x, i_mb_y ); // 加载Cache-逐行扫描
         else
-            x264_macroblock_cache_load_progressive( h, i_mb_x, i_mb_y );
+            x264_macroblock_cache_load_progressive( h, i_mb_x, i_mb_y ); // 加载Cache-隔行扫描
 
 	// c) 调用x264_macroblock_analyse()用于分析宏块的编码模式。
 		//对于帧内宏块来说，主要分析使用Intra16x16合适还是使用Intra4x4合适；

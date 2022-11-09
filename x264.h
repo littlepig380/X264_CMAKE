@@ -27,17 +27,17 @@
 
 // 相关名词收集整理以便理解代码
 
-// 拉格朗日率失真优化（RDO, Rate Distortion Optimization）
+// #拉格朗日率失真优化（RDO, Rate Distortion Optimization）
 
-// 差值平方和（SSD，Sum of Squared Difference）
+// #差值平方和（SSD，Sum of Squared Difference）
 
-// 沃尔什-哈达玛变换, 沃尔什-哈达玛变换（Walsh-Hadmard Transform,WHT），
+// #沃尔什-哈达玛变换, 沃尔什-哈达玛变换（Walsh-Hadmard Transform,WHT），
 // 是一种典型的非正弦函数变换，采用正交直角函数作为基函数，具有与傅里叶函数类似的性质，
 // 图像数据越是均匀分布，经过沃尔什-哈达玛变换后的数据越是集中于矩阵的边角上，
 // 因此沃尔什变换具有能量集中的性质，把一个矩阵的非零元素压缩到只剩在边角上，
 // 可以用于压缩图像信息编码。
 
-// SATD（Sum of Absolute Transformed Difference）,
+// #SATD（Sum of Absolute Transformed Difference）,
 // 哈达玛变换通常用于计算残差的SATD，即对残差信号进行哈达玛变换，
 // 然后计算变换后系数的绝对值的和。SATD相较于SAD更能反映残差在频域的大小。
 // SATD通常用于率失真优化中，
@@ -45,12 +45,23 @@
 // 所以一般使用残差的SATD估计其失真。
 
 
+// #MBAFF(Macro-block Adaptive Field Frame)即宏块级帧场自适应，
+// 是H.264引入的新的编码特性之一。它根据图像各部分特性，确定部分图像以场方式编码，
+// 另一部分图像以帧方式编码。进一步提高了H.264的压缩比。
+// 不同于帧编码、场编码或PAFF编码时的宏块单位编码方式，
+// MBAFF以宏块对(MB pair, MBP)为编码单位，上下相邻的两个宏块组成一个MBP(没错，要求图像垂直分辨率是32的倍数)，
+// 每个宏块对中的两个宏块有各自的索引号，且两者索引号连续，
+// 因此宏块扫描顺序已不再是从左至右从上至下，而是每两个宏块行为单位，上下锯齿状扫描。
+// 以MBP为编码单位是实现MBAFF的重要手段，
+// 这样一来，编码器在进行分析的时候，可以将MBP以两个单独的宏块进行编码，
+// 也可以将两个宏块的奇行像素和偶行像素分别提出来组成两个场宏块进行编码。
+// MBAFF对编码算法带来的影响除了宏块索引号顺序变更外，还会影响预测向量的计算，环路滤波时的滤波处理等。
 
 
-// 变量意义解析
-// b_interlaced 隔行扫描
+// 变量意义解析:
+// #b_interlaced 隔行扫描
 
-// cbp, Coded_block_pattern，即CBP，指亮度和色度分量的各小块的残差的编码方案。
+// #cbp, Coded_block_pattern，即CBP，指亮度和色度分量的各小块的残差的编码方案。
 // 参考链接: https://blog.csdn.net/Times_poem/article/details/84991570
 // CBP详解:
 // cbp一共6bit，高2bit表示cbpc(2：cb、cr中至少一个4x4块的AC系数不全为0；1：cb、cr中至少一个2x2的DC系数不全为0；0：所有色度系数全0） 

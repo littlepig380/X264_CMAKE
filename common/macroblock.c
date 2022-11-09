@@ -529,8 +529,8 @@ void x264_macroblock_thread_init( x264_t *h )
      *                                                       v V V V V
      *                                                       v V V V V
      */
-    h->mb.pic.p_fenc[0] = h->mb.pic.fenc_buf;
-    h->mb.pic.p_fdec[0] = h->mb.pic.fdec_buf + 2*FDEC_STRIDE;
+    h->mb.pic.p_fenc[0] = h->mb.pic.fenc_buf; // 指向当前宏块fenc第一个Y的数据位
+    h->mb.pic.p_fdec[0] = h->mb.pic.fdec_buf + 2*FDEC_STRIDE; // 指向当前宏块fdec第一个Y的数据位
     if( CHROMA_FORMAT )
     {
         h->mb.pic.p_fenc[1] = h->mb.pic.fenc_buf + 16*FENC_STRIDE;
@@ -674,15 +674,16 @@ static const x264_left_table_t left_indices[4] =
 
 static ALWAYS_INLINE void macroblock_cache_load_neighbours( x264_t *h, int mb_x, int mb_y, int b_interlaced )
 {
+    // 交错编码才会使用到的一些坐标与参数修正
     const int mb_interlaced = b_interlaced && MB_INTERLACED;
     int top_y = mb_y - (1 << mb_interlaced);
     int top = top_y * h->mb.i_mb_stride + mb_x;
 
-    h->mb.i_mb_x = mb_x;
-    h->mb.i_mb_y = mb_y;
-    h->mb.i_mb_xy = mb_y * h->mb.i_mb_stride + mb_x;
-    h->mb.i_b8_xy = 2*(mb_y * h->mb.i_b8_stride + mb_x);
-    h->mb.i_b4_xy = 4*(mb_y * h->mb.i_b4_stride + mb_x);
+    h->mb.i_mb_x = mb_x; //宏块级x坐标
+    h->mb.i_mb_y = mb_y; //宏块级y坐标
+    h->mb.i_mb_xy = mb_y * h->mb.i_mb_stride + mb_x; // 宏块级偏移
+    h->mb.i_b8_xy = 2*(mb_y * h->mb.i_b8_stride + mb_x); //8*8子宏块级偏移
+    h->mb.i_b4_xy = 4*(mb_y * h->mb.i_b4_stride + mb_x); //4*4子宏块级偏移
     h->mb.left_b8[0] =
     h->mb.left_b8[1] = -1;
     h->mb.left_b4[0] =
@@ -706,10 +707,11 @@ static ALWAYS_INLINE void macroblock_cache_load_neighbours( x264_t *h, int mb_x,
     int topright_y = top_y;
     int left[2];
 
-    left[0] = left[1] = h->mb.i_mb_xy - 1;
-    h->mb.left_b8[0] = h->mb.left_b8[1] = h->mb.i_b8_xy - 2;
-    h->mb.left_b4[0] = h->mb.left_b4[1] = h->mb.i_b4_xy - 4;
+    left[0] = left[1] = h->mb.i_mb_xy - 1; //当前宏块的前一个宏块的偏移
+    h->mb.left_b8[0] = h->mb.left_b8[1] = h->mb.i_b8_xy - 2; // 8*8对应子宏块的前一个宏块
+    h->mb.left_b4[0] = h->mb.left_b4[1] = h->mb.i_b4_xy - 4; // 4*4对应子宏块的前一个宏块
 
+    // 交错编码的部分先跳过
     if( b_interlaced )
     {
         h->mb.i_mb_top_mbpair_xy = h->mb.i_mb_xy - 2*h->mb.i_mb_stride;
@@ -770,16 +772,17 @@ static ALWAYS_INLINE void macroblock_cache_load_neighbours( x264_t *h, int mb_x,
         }
     }
 
-    if( mb_x > 0 )
+    // 首先是检查是否有左相邻宏块, frame级别与slice级别
+    if( mb_x > 0 ) // 如果x大于0,则不是图像中最左侧一列的宏块, 也就是说当前宏块有左邻块
     {
-        h->mb.i_neighbour_frame |= MB_LEFT;
-        h->mb.i_mb_left_xy[0] = left[0];
+        h->mb.i_neighbour_frame |= MB_LEFT; // 忽略slice边界的帧级别的相邻宏块
+        h->mb.i_mb_left_xy[0] = left[0]; // [question]为什么left是一个两个成员的数组
         h->mb.i_mb_left_xy[1] = left[1];
         h->mb.i_mb_type_left[0] = h->mb.type[h->mb.i_mb_left_xy[0]];
         h->mb.i_mb_type_left[1] = h->mb.type[h->mb.i_mb_left_xy[1]];
-        if( h->mb.slice_table[left[0]] == h->sh.i_first_mb )
+        if( h->mb.slice_table[left[0]] == h->sh.i_first_mb ) // 如果左边的宏块所属slice的第一个宏块与当前宏块的相同(说白了就是两个宏块同属于1个slice)
         {
-            h->mb.i_neighbour |= MB_LEFT;
+            h->mb.i_neighbour |= MB_LEFT; // 那么记录一下其有slice级别左相邻
 
             // FIXME: We don't currently support constrained intra + mbaff.
             if( !h->param.b_constrained_intra || IS_INTRA( h->mb.i_mb_type_left[0] ) )
@@ -790,6 +793,7 @@ static ALWAYS_INLINE void macroblock_cache_load_neighbours( x264_t *h, int mb_x,
     /* We can't predict from the previous threadslice since it hasn't been encoded yet. */
     if( (h->i_threadslice_start >> mb_interlaced) != (mb_y >> mb_interlaced) )
     {
+        // 第二是检查是否有顶相邻宏块, frame级别与slice级别
         if( top >= 0 )
         {
             h->mb.i_neighbour_frame |= MB_TOP;
@@ -806,6 +810,15 @@ static ALWAYS_INLINE void macroblock_cache_load_neighbours( x264_t *h, int mb_x,
                 /* We only need to prefetch the top blocks because the left was just written
                  * to as part of the previous cache_save.  Since most target CPUs use write-allocate
                  * caches, left blocks are near-guaranteed to be in L1 cache.  Top--not so much. */
+                // [question] [performance] 还没有学会的高阶技巧. 注释字面上的意思是: 
+                // 我们只需要预取top块，因为左边的块刚刚被写进了之前的cache_save。
+                // 因为大多数目标cpu使用写分配缓存，所以剩下的块几乎肯定位于L1缓存中。
+                // 只有top的块并非如此。
+
+                // 根据上述说法推测top加载之后,topleft与topright都可以命中cache
+
+                // 这里实际上用到的就是__builtin_prefetch(),内核函数中经常用到的数据预取操作,提前加载缓存
+                // 参考连接: https://www.cnblogs.com/dongzhiquan/p/3694858.html
                 x264_prefetch( &h->mb.cbp[top] );
                 x264_prefetch( h->mb.intra4x4_pred_mode[top] );
                 x264_prefetch( &h->mb.non_zero_count[top][12] );
@@ -814,7 +827,7 @@ static ALWAYS_INLINE void macroblock_cache_load_neighbours( x264_t *h, int mb_x,
                     x264_prefetch( &h->mb.skipbp[top] );
             }
         }
-
+        // 第三是检查是否有左上相邻宏块, frame级别与slice级别
         if( mb_x > 0 && topleft_y >= 0  )
         {
             h->mb.i_neighbour_frame |= MB_TOPLEFT;
@@ -830,6 +843,7 @@ static ALWAYS_INLINE void macroblock_cache_load_neighbours( x264_t *h, int mb_x,
             }
         }
 
+        // 第四是检查是否有右上相邻宏块, frame级别与slice级别
         if( mb_x < h->mb.i_mb_width - 1 && topright_y >= 0 )
         {
             h->mb.i_neighbour_frame |= MB_TOPRIGHT;
@@ -856,7 +870,7 @@ static ALWAYS_INLINE void macroblock_cache_load_neighbours( x264_t *h, int mb_x,
 
 static ALWAYS_INLINE void macroblock_cache_load( x264_t *h, int mb_x, int mb_y, int b_mbaff )
 {
-    // 加载不同尺寸相邻宏块的引用信息, 用于预测当前宏块
+    // 首先是要判断当前块的相应的相邻关系, 分别是left/top/topleft/topright
     macroblock_cache_load_neighbours( h, mb_x, mb_y, b_mbaff );
 
     int *left = h->mb.i_mb_left_xy;
@@ -871,26 +885,100 @@ static ALWAYS_INLINE void macroblock_cache_load( x264_t *h, int mb_x, int mb_y, 
     /* GCC pessimizes direct loads from heap-allocated arrays due to aliasing. */
     /* By only dereferencing them once, we avoid this issue. */
     int8_t (*i4x4)[8] = h->mb.intra4x4_pred_mode;
-    uint8_t (*nnz)[48] = h->mb.non_zero_count;
+    //DCT非0系数个数
+    uint8_t (*nnz)[48] = h->mb.non_zero_count; //yuv 16*3 规模
+    //CBP值
     int16_t *cbp = h->mb.cbp;
 
     const x264_left_table_t *left_index_table = h->mb.left_index_table;
 
     h->mb.cache.deblock_strength = h->deblock_strength[mb_y&1][h->param.b_sliced_threads?h->mb.i_mb_xy:mb_x];
 
+    /*
+     *
+     * 关于多次出现的scan8
+     *
+     * scan8是和cache配合使用的
+     * cache是一个表格。表格中存储了一整个宏块的信息，每一个元素代表了一个“4x4亮度块”（H.264中最小的亮度处理单位）。
+     * scan8[]则存储了宏块信息在cache中的索引值
+     *
+     * scan8[]中的“8”，意思应该是按照8x8为单元来扫描？
+     * 因此可以理解为“按照8x8为单元来扫描4x4的块”？
+     *
+     * scan8中按照顺序分别存储了Y，U，V信息在cache中的索引值。具体的存储还是在相应的cache中。
+     *
+     * cache中首先存储Y，然后存储U和V。cache中的存储方式如下所示。
+     * 其中数字代表了scan8[]中元素的索引值
+     *
+     * +---+---+---+---+---+---+---+---+---+
+     * |   | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 |
+     * +---+---+---+---+---+---+---+---+---+
+     * | 0 | 48|   |   |   |  y|  y|  y|  y|
+     * | 1 |   |   |   |  y|  0|  1|  4|  5|
+     * | 2 |   |   |   |  y|  2|  3|  6|  7|
+     * | 3 |   |   |   |  y|  8|  9| 12| 13|
+     * | 4 |   |   |   |  y| 10| 11| 14| 15|
+     * | 5 | 49|   |   |   |  u|  u|  u|  u|
+     * | 6 |   |   |   |  u| 16| 17| 20| 21|
+     * | 7 |   |   |   |  u| 18| 19| 22| 23|
+     * | 8 |   |   |   |  u| 24| 25| 28| 29|
+     * | 9 |   |   |   |  u| 26| 27| 30| 31|
+     * |10 | 50|   |   |   |  v|  v|  v|  v|
+     * |11 |   |   |   |  v| 32| 33| 36| 37|
+     * |12 |   |   |   |  v| 34| 35| 38| 39|
+     * |13 |   |   |   |  v| 40| 41| 44| 45|
+     * |14 |   |   |   |  v| 42| 43| 46| 47|
+     * |---+---+---+---+---+---+---+---+---+
+     * |   |
+     *
+	 * 扫描方式：
+	 * o-o o-o
+	 *  / / /
+	 * o-o o-o
+	 *  ,---'
+	 * o-o o-o
+	 *  / / /
+	 * o-o o-o
+	 *
+     */
+
     /* load cache */
+    // 从top相邻宏块开始, 载入宏块预测相关的信息. 同样采用了数据预取的手段
     if( h->mb.i_neighbour & MB_TOP )
     {
         h->mb.cache.i_cbp_top = cbp[top];
-        /* load intra4x4 */
+        /* load intra4x4 */ // 将top位置的预测模式按照scan8的方式load到相应的位置
+        /*
+         * 填充intra4x4_pred_mode[]
+         * 在这里相当于在intra4x4_pred_mode[]填充了“y”，如下所示（没有U、V）
+         *   |
+         * --+--------------
+         *   | 0 0 0 0 y y y y
+         *   | 0 0 0 0 Y Y Y Y
+         *   | 0 0 0 0 Y Y Y Y
+         *   | 0 0 0 0 Y Y Y Y
+         *   | 0 0 0 0 Y Y Y Y
+         */
+        // 注意intra4x4_pred_mode是int8,CP32是一次性拷贝四个y
         CP32( &h->mb.cache.intra4x4_pred_mode[x264_scan8[0] - 8], &i4x4[top][0] );
 
         /* load non_zero_count */
+        /*
+         * 填充non_zero_count[]
+         * 在这里相当于在non_zero_count[]填充了“y”，如下所示（只列出了Y。U、V是类似的）
+         *   |
+         * --+--------------
+         *   | 0 0 0 0 y y y y
+         *   | 0 0 0 0 Y Y Y Y
+         *   | 0 0 0 0 Y Y Y Y
+         *   | 0 0 0 0 Y Y Y Y
+         *   | 0 0 0 0 Y Y Y Y
+         */
         CP32( &h->mb.cache.non_zero_count[x264_scan8[ 0] - 8], &nnz[top][12] );
         CP32( &h->mb.cache.non_zero_count[x264_scan8[16] - 8], &nnz[top][16-4 + (16>>CHROMA_V_SHIFT)] );
         CP32( &h->mb.cache.non_zero_count[x264_scan8[32] - 8], &nnz[top][32-4 + (16>>CHROMA_V_SHIFT)] );
 
-        /* Finish the prefetching */
+        /* Finish the prefetching */ // 预先取数据的加速操作
         for( int l = 0; l < lists; l++ )
         {
             x264_prefetch( &h->mb.mv[l][top_4x4-1] );
@@ -904,6 +992,7 @@ static ALWAYS_INLINE void macroblock_cache_load( x264_t *h, int mb_x, int mb_y, 
     }
     else
     {
+        //没有相关信息的时候，填充下列数据
         h->mb.cache.i_cbp_top = -1;
 
         /* load intra4x4 */
@@ -915,6 +1004,7 @@ static ALWAYS_INLINE void macroblock_cache_load( x264_t *h, int mb_x, int mb_y, 
         M32( &h->mb.cache.non_zero_count[x264_scan8[32] - 8] ) = 0x80808080U;
     }
 
+    // 如果有左侧相邻宏块就载入相关信息
     if( h->mb.i_neighbour & MB_LEFT )
     {
         int ltop = left[LTOP];
@@ -929,12 +1019,34 @@ static ALWAYS_INLINE void macroblock_cache_load( x264_t *h, int mb_x, int mb_y, 
             h->mb.cache.i_cbp_left = cbp[ltop];
 
         /* load intra4x4 */
+        /*
+         * 填充intra4x4_pred_mode[]
+         * 在这里相当于在intra4x4_pred_mode[]填充了“y”，如下所示（没有U、V）
+         *   |
+         * --+--------------
+         *   | 0 0 0 0 0 0 0 0
+         *   | 0 0 0 y Y Y Y Y
+         *   | 0 0 0 y Y Y Y Y
+         *   | 0 0 0 y Y Y Y Y
+         *   | 0 0 0 y Y Y Y Y
+         */
         h->mb.cache.intra4x4_pred_mode[x264_scan8[ 0] - 1] = i4x4[ltop][left_index_table->intra[0]];
         h->mb.cache.intra4x4_pred_mode[x264_scan8[ 2] - 1] = i4x4[ltop][left_index_table->intra[1]];
         h->mb.cache.intra4x4_pred_mode[x264_scan8[ 8] - 1] = i4x4[lbot][left_index_table->intra[2]];
         h->mb.cache.intra4x4_pred_mode[x264_scan8[10] - 1] = i4x4[lbot][left_index_table->intra[3]];
 
         /* load non_zero_count */
+        /*
+         * 填充non_zero_count[]
+         * 在这里相当于在non_zero_count[]填充了“y”，如下所示（只列出了Y，U、V是类似的）
+         *   |
+         * --+--------------
+         *   | 0 0 0 0 0 0 0 0
+         *   | 0 0 0 y Y Y Y Y
+         *   | 0 0 0 y Y Y Y Y
+         *   | 0 0 0 y Y Y Y Y
+         *   | 0 0 0 y Y Y Y Y
+         */
         h->mb.cache.non_zero_count[x264_scan8[ 0] - 1] = nnz[ltop][left_index_table->nnz[0]];
         h->mb.cache.non_zero_count[x264_scan8[ 2] - 1] = nnz[ltop][left_index_table->nnz[1]];
         h->mb.cache.non_zero_count[x264_scan8[ 8] - 1] = nnz[lbot][left_index_table->nnz[2]];
@@ -962,6 +1074,7 @@ static ALWAYS_INLINE void macroblock_cache_load( x264_t *h, int mb_x, int mb_y, 
     }
     else
     {
+        //没有相关信息的时候，填充下列数据
         h->mb.cache.i_cbp_left = -1;
 
         h->mb.cache.intra4x4_pred_mode[x264_scan8[ 0] - 1] =
@@ -1002,9 +1115,22 @@ static ALWAYS_INLINE void macroblock_cache_load( x264_t *h, int mb_x, int mb_y, 
 
     if( !b_mbaff )
     {
+    	//没有“宏块级帧场自适应”情况的时候
+ 
+    	// 亮度
+    	// 拷贝上一个宏块最右边一列（共16个）像素（p_fdec[0]+15）
+    	// 作为这一个宏块最左边再靠左的一列像素（p_fdec[0]-1）
+    	// 一次拷贝8个（起始点上面4个下面4个），拷贝2次
+        // 特别注意一下这个x264_copy_column8的输入参数是这个拷贝列的中点, 函数作者注释这样拷贝在x86上面更快,可以借鉴
         x264_copy_column8( h->mb.pic.p_fdec[0]-1+ 4*FDEC_STRIDE, h->mb.pic.p_fdec[0]+15+ 4*FDEC_STRIDE );
         x264_copy_column8( h->mb.pic.p_fdec[0]-1+12*FDEC_STRIDE, h->mb.pic.p_fdec[0]+15+12*FDEC_STRIDE );
+
+        // 加载图像相关的指针
+        // 第4个参数：指明了第几个分量（Y、U、V）
+        // 第5个参数：指明了是否为色度
         macroblock_load_pic_pointers( h, mb_x, mb_y, 0, 0, 0 );
+
+        //U和V
         if( CHROMA444 )
         {
             x264_copy_column8( h->mb.pic.p_fdec[1]-1+ 4*FDEC_STRIDE, h->mb.pic.p_fdec[1]+15+ 4*FDEC_STRIDE );
@@ -1016,6 +1142,10 @@ static ALWAYS_INLINE void macroblock_cache_load( x264_t *h, int mb_x, int mb_y, 
         }
         else if( CHROMA_FORMAT )
         {
+        	//YUV420P的情况下(主要是420的排布与444不同)
+        	//拷贝上一个宏块最右边一列（共8个）像素
+			//作为这一个宏块最左边再靠左的一列像素
+			//一次拷贝8个
             x264_copy_column8( h->mb.pic.p_fdec[1]-1+ 4*FDEC_STRIDE, h->mb.pic.p_fdec[1]+ 7+ 4*FDEC_STRIDE );
             x264_copy_column8( h->mb.pic.p_fdec[2]-1+ 4*FDEC_STRIDE, h->mb.pic.p_fdec[2]+ 7+ 4*FDEC_STRIDE );
             if( CHROMA_FORMAT == CHROMA_422 )
@@ -1038,6 +1168,7 @@ static ALWAYS_INLINE void macroblock_cache_load( x264_t *h, int mb_x, int mb_y, 
             macroblock_load_pic_pointers( h, mb_x, mb_y, 1, 1, 1 );
     }
 
+    //[question]这里integral参数的作用还没有看明白,有待推敲
     if( h->fdec->integral )
     {
         int offset = 16 * (mb_x + mb_y * h->fdec->i_stride[0]);
@@ -1048,15 +1179,16 @@ static ALWAYS_INLINE void macroblock_cache_load( x264_t *h, int mb_x, int mb_y, 
 
     x264_prefetch_fenc( h, h->fenc, mb_x, mb_y );
 
-    /* load ref/mv/mvd */
+    /* load ref/mv/mvd */ //载入帧间预测相关的信息顺序是左上/上/右上/左
     for( int l = 0; l < lists; l++ )
     {
-        int16_t (*mv)[2] = h->mb.mv[l];
-        int8_t *ref = h->mb.ref[l];
+        int16_t (*mv)[2] = h->mb.mv[l]; //[question]个人理解是宏块级别mv[0]为P帧参考帧的mv情况, 如果有mv[1]就是B帧两个参考帧的mv,取值范围确定只能是(-1,0,1),存疑
+        int8_t *ref = h->mb.ref[l]; //[question]个人理解是宏块级别ref[0]为P帧仅有1个参考帧的ref_id, 如果有ref[1]就是B帧两个参考帧的ref_id,存疑
 
-        int i8 = x264_scan8[0] - 1 - 1*8;
+        int i8 = x264_scan8[0] - 1 - 1*8; // 此处定位的是左上的位置
         if( h->mb.i_neighbour & MB_TOPLEFT )
         {
+            //填充宏块左上方信息
             int ir = b_mbaff ? 2*(s8x8*h->mb.i_mb_topleft_y + mb_x-1)+1+s8x8 : top_8x8 - 1;
             int iv = b_mbaff ? 4*(s4x4*h->mb.i_mb_topleft_y + mb_x-1)+3+3*s4x4 : top_4x4 - 1;
             if( b_mbaff && h->mb.topleft_partition )
@@ -1066,11 +1198,36 @@ static ALWAYS_INLINE void macroblock_cache_load( x264_t *h, int mb_x, int mb_y, 
                 iv -= 2*s4x4;
                 ir -= s8x8;
             }
-            h->mb.cache.ref[l][i8] = ref[ir];
-            CP32( h->mb.cache.mv[l][i8], mv[iv] );
+            /*
+			 * 填充参考帧序号ref[]
+			 * 在这里相当于在ref[]填充了“y”，
+			 *   |
+			 * --+--------------
+			 *   | 0 0 0 y 0 0 0 0
+			 *   | 0 0 0 0 Y Y Y Y
+			 *   | 0 0 0 0 Y Y Y Y
+			 *   | 0 0 0 0 Y Y Y Y
+			 *   | 0 0 0 0 Y Y Y Y
+			 */
+            //参考帧序号
+            h->mb.cache.ref[l][i8] = ref[ir]; // ref的帧这里引用来自左上8*8的块,取值范围确定只能是(-1,0,1)
+            /*
+			 * 填充运动矢量mv[]
+			 * 在这里相当于在mv[]填充了“y”，
+			 *   |
+			 * --+--------------
+			 *   | 0 0 0 y 0 0 0 0
+			 *   | 0 0 0 0 Y Y Y Y
+			 *   | 0 0 0 0 Y Y Y Y
+			 *   | 0 0 0 0 Y Y Y Y
+			 *   | 0 0 0 0 Y Y Y Y
+			 */
+            //运动矢量
+            CP32( h->mb.cache.mv[l][i8], mv[iv] );// ref块相关的向量却来自于更小的左上4*4的块,存疑
         }
         else
         {
+            // 如果没有找到
             h->mb.cache.ref[l][i8] = -2;
             M32( h->mb.cache.mv[l][i8] ) = 0;
         }
@@ -1078,14 +1235,39 @@ static ALWAYS_INLINE void macroblock_cache_load( x264_t *h, int mb_x, int mb_y, 
         i8 = x264_scan8[0] - 8;
         if( h->mb.i_neighbour & MB_TOP )
         {
+        	//填充宏块上方信息
+ 
+            /*
+             * 填充参考帧序号ref[]
+             * 在这里相当于在ref[]分别填充了“1”和“2”，
+             *   |
+             * --+--------------
+             *   | 0 0 0 0 1 1 2 2
+             *   | 0 0 0 0 Y Y Y Y
+             *   | 0 0 0 0 Y Y Y Y
+             *   | 0 0 0 0 Y Y Y Y
+             *   | 0 0 0 0 Y Y Y Y
+             */
             h->mb.cache.ref[l][i8+0] =
             h->mb.cache.ref[l][i8+1] = ref[top_8x8 + 0];
             h->mb.cache.ref[l][i8+2] =
             h->mb.cache.ref[l][i8+3] = ref[top_8x8 + 1];
-            CP128( h->mb.cache.mv[l][i8], mv[top_4x4] );
+            /*
+			 * 填充运动矢量mv[]
+			 * 在这里相当于在mv[]填充了y，
+			 *   |
+			 * --+--------------
+			 *   | 0 0 0 0 y y y y
+			 *   | 0 0 0 0 Y Y Y Y
+			 *   | 0 0 0 0 Y Y Y Y
+			 *   | 0 0 0 0 Y Y Y Y
+			 *   | 0 0 0 0 Y Y Y Y
+			 */
+            CP128( h->mb.cache.mv[l][i8], mv[top_4x4] ); //似乎引用的相邻块的mv都来自4*4的结果
         }
         else
         {
+            // 如果没有找到
             M128( h->mb.cache.mv[l][i8] ) = M128_ZERO;
             M32( &h->mb.cache.ref[l][i8] ) = (uint8_t)(-2) * 0x01010101U;
         }
@@ -1093,17 +1275,19 @@ static ALWAYS_INLINE void macroblock_cache_load( x264_t *h, int mb_x, int mb_y, 
         i8 = x264_scan8[0] + 4 - 1*8;
         if( h->mb.i_neighbour & MB_TOPRIGHT )
         {
+            //填充宏块右上方信息
             int ir = b_mbaff ? 2*(s8x8*h->mb.i_mb_topright_y + (mb_x+1))+s8x8 : top_8x8 + 2;
             int iv = b_mbaff ? 4*(s4x4*h->mb.i_mb_topright_y + (mb_x+1))+3*s4x4 : top_4x4 + 4;
             h->mb.cache.ref[l][i8] = ref[ir];
             CP32( h->mb.cache.mv[l][i8], mv[iv] );
         }
         else
-             h->mb.cache.ref[l][i8] = -2;
+             h->mb.cache.ref[l][i8] = -2;// 如果没有找到
 
         i8 = x264_scan8[0] - 1;
         if( h->mb.i_neighbour & MB_LEFT )
         {
+        	//填充宏块左边信息
             if( b_mbaff )
             {
                 h->mb.cache.ref[l][i8+0*8] = ref[h->mb.left_b8[LTOP] + 1 + s8x8*left_index_table->ref[0]];
@@ -1120,11 +1304,33 @@ static ALWAYS_INLINE void macroblock_cache_load( x264_t *h, int mb_x, int mb_y, 
             {
                 const int ir = h->mb.i_b8_xy - 1;
                 const int iv = h->mb.i_b4_xy - 1;
+                /*
+                 * 填充参考帧序号ref[]
+                 * 在这里相当于在ref[]分别填充了“1”和“2”，
+                 *   |
+                 * --+--------------
+                 *   | 0 0 0 0 0 0 0 0
+                 *   | 0 0 0 1 Y Y Y Y
+                 *   | 0 0 0 1 Y Y Y Y
+                 *   | 0 0 0 2 Y Y Y Y
+                 *   | 0 0 0 2 Y Y Y Y
+                 */
                 h->mb.cache.ref[l][i8+0*8] =
                 h->mb.cache.ref[l][i8+1*8] = ref[ir + 0*s8x8];
                 h->mb.cache.ref[l][i8+2*8] =
                 h->mb.cache.ref[l][i8+3*8] = ref[ir + 1*s8x8];
 
+                /*
+				 * 填充运动矢量mv[]
+				 * 在这里相当于在mv[]填充了y，
+				 *   |
+				 * --+--------------
+				 *   | 0 0 0 0 0 0 0 0
+				 *   | 0 0 0 y Y Y Y Y
+				 *   | 0 0 0 y Y Y Y Y
+				 *   | 0 0 0 y Y Y Y Y
+				 *   | 0 0 0 y Y Y Y Y
+				 */
                 CP32( h->mb.cache.mv[l][i8+0*8], mv[iv + 0*s4x4] );
                 CP32( h->mb.cache.mv[l][i8+1*8], mv[iv + 1*s4x4] );
                 CP32( h->mb.cache.mv[l][i8+2*8], mv[iv + 2*s4x4] );
@@ -1173,6 +1379,7 @@ static ALWAYS_INLINE void macroblock_cache_load( x264_t *h, int mb_x, int mb_y, 
             }
         }
 
+        //使用了CABAC的时候才会运行, 主要是跟mvd相关的缓存的加载
         if( h->param.b_cabac )
         {
             uint8_t (*mvd)[8][2] = h->mb.mvd[l];
@@ -1280,6 +1487,7 @@ static ALWAYS_INLINE void macroblock_cache_load( x264_t *h, int mb_x, int mb_y, 
             h->mb.b_allow_skip = 0;
     }
 
+    //使用了CABAC的时候才会运行
     if( h->param.b_cabac )
     {
         if( b_mbaff )
@@ -1310,6 +1518,7 @@ static ALWAYS_INLINE void macroblock_cache_load( x264_t *h, int mb_x, int mb_y, 
     }
 
     /* load skip */
+    //处理“skip”类型宏块
     if( h->sh.i_type == SLICE_TYPE_B )
     {
         h->mb.bipred_weight = h->mb.bipred_weight_buf[MB_INTERLACED][MB_INTERLACED&(mb_y&1)];

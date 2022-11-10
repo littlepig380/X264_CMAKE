@@ -960,6 +960,7 @@ static ALWAYS_INLINE void macroblock_cache_load( x264_t *h, int mb_x, int mb_y, 
          *   | 0 0 0 0 Y Y Y Y
          */
         // 注意intra4x4_pred_mode是int8,CP32是一次性拷贝四个y
+        // 从mb.intra4x4_pred_mode中拷贝相对应的宏块到mb.cache.intra4x4_pred_mode当中对应位置
         CP32( &h->mb.cache.intra4x4_pred_mode[x264_scan8[0] - 8], &i4x4[top][0] );
 
         /* load non_zero_count */
@@ -974,6 +975,7 @@ static ALWAYS_INLINE void macroblock_cache_load( x264_t *h, int mb_x, int mb_y, 
          *   | 0 0 0 0 Y Y Y Y
          *   | 0 0 0 0 Y Y Y Y
          */
+        //[question]从mb.non_zero_count中拷贝相对应的宏块到mb.cache.non_zero_count当中对应位置,这里对存储结构还没有理解
         CP32( &h->mb.cache.non_zero_count[x264_scan8[ 0] - 8], &nnz[top][12] );
         CP32( &h->mb.cache.non_zero_count[x264_scan8[16] - 8], &nnz[top][16-4 + (16>>CHROMA_V_SHIFT)] );
         CP32( &h->mb.cache.non_zero_count[x264_scan8[32] - 8], &nnz[top][32-4 + (16>>CHROMA_V_SHIFT)] );
@@ -1030,6 +1032,7 @@ static ALWAYS_INLINE void macroblock_cache_load( x264_t *h, int mb_x, int mb_y, 
          *   | 0 0 0 y Y Y Y Y
          *   | 0 0 0 y Y Y Y Y
          */
+        //[question]对于left_index_table的存储结构与使用方法还需要进一步研究
         h->mb.cache.intra4x4_pred_mode[x264_scan8[ 0] - 1] = i4x4[ltop][left_index_table->intra[0]];
         h->mb.cache.intra4x4_pred_mode[x264_scan8[ 2] - 1] = i4x4[ltop][left_index_table->intra[1]];
         h->mb.cache.intra4x4_pred_mode[x264_scan8[ 8] - 1] = i4x4[lbot][left_index_table->intra[2]];
@@ -1356,6 +1359,7 @@ static ALWAYS_INLINE void macroblock_cache_load( x264_t *h, int mb_x, int mb_y, 
          * above diagram do not exist, but the entries d, e and f exist (in
          * the macroblock to the left) then use those instead.
          */
+        // b_mbaff==1的帧场自适应的都先跳过
         if( b_mbaff && (h->mb.i_neighbour & MB_LEFT) )
         {
             if( MB_INTERLACED && !h->mb.field[h->mb.i_mb_xy-1] )
@@ -1549,15 +1553,46 @@ static ALWAYS_INLINE void macroblock_cache_load( x264_t *h, int mb_x, int mb_y, 
     if( h->sh.i_type == SLICE_TYPE_P )
         x264_mb_predict_mv_pskip( h, h->mb.cache.pskip_mv );
 
+    /*
+     * i_neightbour8把一个宏块分成4个8x8的子块，编号如下，用于记录它们邻块的可用性
+	 * +--------+--------+
+	 * |        |        |
+	 * |   0    |   1    |
+	 * |        |        |
+	 * +--------+--------+
+	 * |        |        |
+	 * |   2    |   3    |
+	 * |        |        |
+	 * +--------+--------+
+     *
+     * i_neightbour4把一个宏块分成16个4x4的子块，编号如下，用于记录它们邻块的可用性
+     * （实际上也是类似scan8[]读取cache的顺序）
+	 * +----+----+----+----+
+	 * | 0  | 1  | 4  | 5  |
+	 * +----+----+----+----+
+	 * | 2  | 3  | 6  | 7  |
+	 * +----+----+----+----+
+	 * | 8  | 9  | 12 | 13 |
+	 * +----+----+----+----+
+	 * | 10 | 11 | 14 | 15 |
+	 * +----+----+----+----+
+	 *
+     */
+
+    //这里主要记录一下最后的相邻结果，从8*8与4*4的维度看看哪些有相邻的宏块，其实结果都是由i_neighbour_intra得出
+    //i_neighbour_intra来自于这个函数最开始的调用：macroblock_cache_load_neighbours
     h->mb.i_neighbour4[0] =
     h->mb.i_neighbour8[0] = (h->mb.i_neighbour_intra & (MB_TOP|MB_LEFT|MB_TOPLEFT))
                             | ((h->mb.i_neighbour_intra & MB_TOP) ? MB_TOPRIGHT : 0);
+
     h->mb.i_neighbour4[4] =
     h->mb.i_neighbour4[1] = MB_LEFT | ((h->mb.i_neighbour_intra & MB_TOP) ? (MB_TOP|MB_TOPLEFT|MB_TOPRIGHT) : 0);
+
     h->mb.i_neighbour4[2] =
     h->mb.i_neighbour4[8] =
     h->mb.i_neighbour4[10] =
     h->mb.i_neighbour8[2] = MB_TOP|MB_TOPRIGHT | ((h->mb.i_neighbour_intra & MB_LEFT) ? (MB_LEFT|MB_TOPLEFT) : 0);
+
     h->mb.i_neighbour4[5] =
     h->mb.i_neighbour8[1] = MB_LEFT | (h->mb.i_neighbour_intra & MB_TOPRIGHT)
                             | ((h->mb.i_neighbour_intra & MB_TOP) ? MB_TOP|MB_TOPLEFT : 0);

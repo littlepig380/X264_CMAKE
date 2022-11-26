@@ -256,7 +256,7 @@ int x264_macroblock_cache_allocate( x264_t *h )
     h->mb.b_interlaced = PARAM_INTERLACED;
 
     PREALLOC_INIT
-
+    // [performance]采用集中malloc的方式能够一次性完成所有内存的申请,这种方式能否提升性能需要验证
     PREALLOC( h->mb.qp, i_mb_count * sizeof(int8_t) );
     PREALLOC( h->mb.cbp, i_mb_count * sizeof(int16_t) );
     PREALLOC( h->mb.mb_transform_size, i_mb_count * sizeof(int8_t) );
@@ -560,7 +560,7 @@ void x264_prefetch_fenc( x264_t *h, x264_frame_t *fenc, int i_mb_x, int i_mb_y )
 
 NOINLINE void x264_copy_column8( pixel *dst, pixel *src )
 {
-    // input pointers are offset by 4 rows because that's faster (smaller instruction size on x86)
+    // [performance]input pointers are offset by 4 rows because that's faster (smaller instruction size on x86)
     for( int i = -4; i < 4; i++ )
         dst[i*FDEC_STRIDE] = src[i*FDEC_STRIDE];
 }
@@ -871,6 +871,7 @@ static ALWAYS_INLINE void macroblock_cache_load_neighbours( x264_t *h, int mb_x,
 static ALWAYS_INLINE void macroblock_cache_load( x264_t *h, int mb_x, int mb_y, int b_mbaff )
 {
     // 首先是要判断当前块的相应的相邻关系, 分别是left/top/topleft/topright
+    // 如果承载相应的块，特别是top块，做相应的数据预取，加速计算
     macroblock_cache_load_neighbours( h, mb_x, mb_y, b_mbaff );
 
     int *left = h->mb.i_mb_left_xy;
@@ -1124,7 +1125,7 @@ static ALWAYS_INLINE void macroblock_cache_load( x264_t *h, int mb_x, int mb_y, 
     	// 拷贝上一个宏块最右边一列（共16个）像素（p_fdec[0]+15）
     	// 作为这一个宏块最左边再靠左的一列像素（p_fdec[0]-1）
     	// 一次拷贝8个（起始点上面4个下面4个），拷贝2次
-        // 特别注意一下这个x264_copy_column8的输入参数是这个拷贝列的中点, 函数作者注释这样拷贝在x86上面更快,可以借鉴
+        // [performance]特别注意一下这个x264_copy_column8的输入参数是这个拷贝列的中点, 函数作者注释这样拷贝在x86上面更快,可以借鉴
         x264_copy_column8( h->mb.pic.p_fdec[0]-1+ 4*FDEC_STRIDE, h->mb.pic.p_fdec[0]+15+ 4*FDEC_STRIDE );
         x264_copy_column8( h->mb.pic.p_fdec[0]-1+12*FDEC_STRIDE, h->mb.pic.p_fdec[0]+15+12*FDEC_STRIDE );
 
@@ -1970,6 +1971,20 @@ void x264_macroblock_cache_save( x264_t *h )
     h->mb.partition[i_mb_xy] = IS_INTRA( i_mb_type ) ? D_16x16 : h->mb.i_partition;
     h->mb.i_mb_prev_xy = i_mb_xy;
 
+    /*
+     * 将当前块的4*4帧内预测模式保存在mb.intra4x4_pred_mode当中当前宏块的位置
+     * 在这里相当将mb.cache.intra4x4_pred_mode[]中“y”的位置保存下来，如下所示（没有U、V）
+     *   |
+     * --+--------------
+     *   | 0 0 0 0 0 0 0 0
+     *   | 0 0 0 0 Y Y Y y
+     *   | 0 0 0 0 Y Y Y y
+     *   | 0 0 0 0 Y Y Y y
+     *   | 0 0 0 0 y y y y
+     */
+    // 注意intra4x4_pred_mode是int8,CP32是一次性拷贝四个y
+    // 注意mb.intra4x4_pred_mode最多只能保存8个int8，实际上也只要保存7个即可,
+    // 这里只要底边和右侧7个位置的值就可以模拟所有的intra模式,所以这里拷贝了y的7个对应位置
     /* save intra4x4 */
     if( i_mb_type == I_4x4 )
     {

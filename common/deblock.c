@@ -182,6 +182,28 @@ static void deblock_h_chroma_422_c( pixel *pix, intptr_t stride, int alpha, int 
 
 static ALWAYS_INLINE void deblock_edge_luma_intra_c( pixel *pix, intptr_t xstride, int alpha, int beta )
 {
+
+	//如果xstride=stride，ystride=1
+	//就是处理纵向的6个像素
+	//对应的是方块的横向边界的滤波。如下所示：
+	//        p2
+	//        p1
+	//        p0
+	//=====图像边界=====
+	//        q0
+	//        q1
+	//        q2
+	//
+	//如果xstride=1，ystride=stride
+	//就是处理纵向的6个像素
+	//对应的是方块的横向边界的滤波，即如下所示：
+	//          ||
+	// p2 p1 p0 || q0 q1 q2
+	//          ||
+	//         边界
+ 
+	//注意：这里乘的是xstride
+
     int p2 = pix[-3*xstride];
     int p1 = pix[-2*xstride];
     int p0 = pix[-1*xstride];
@@ -189,6 +211,7 @@ static ALWAYS_INLINE void deblock_edge_luma_intra_c( pixel *pix, intptr_t xstrid
     int q1 = pix[ 1*xstride];
     int q2 = pix[ 2*xstride];
 
+    //满足条件的时候，才滤波
     if( abs( p0 - q0 ) < alpha && abs( p1 - p0 ) < beta && abs( q1 - q0 ) < beta )
     {
         if( abs( p0 - q0 ) < ((alpha >> 2) + 2) )
@@ -221,18 +244,39 @@ static ALWAYS_INLINE void deblock_edge_luma_intra_c( pixel *pix, intptr_t xstrid
 }
 static inline void deblock_luma_intra_c( pixel *pix, intptr_t xstride, intptr_t ystride, int alpha, int beta )
 {
+    // 一次一行或者一列做环路滤波操作
     for( int d = 0; d < 16; d++, pix += ystride )
-        deblock_edge_luma_intra_c( pix, xstride, alpha, beta );
+        deblock_edge_luma_intra_c( pix, xstride, alpha, beta ); //一次处理一个点,总共十六次
 }
 static void deblock_h_luma_intra_mbaff_c( pixel *pix, intptr_t ystride, int alpha, int beta )
 {
     for( int d = 0; d < 8; d++, pix += ystride )
         deblock_edge_luma_intra_c( pix, 1, alpha, beta );
 }
+
+//垂直（Vertical）强滤波器-Bs为4
+//      边界
+//         x
+//         x
+// 边界----------
+//         x
+//         x
 static void deblock_v_luma_intra_c( pixel *pix, intptr_t stride, int alpha, int beta )
 {
+	//注意
+	//xstride=stride
+	//ystride=1
+	//处理完1个像素点之后，pix增加ystride
+ 
+	//水平滤波和垂直滤波通用的强滤波函数
     deblock_luma_intra_c( pix, stride, 1, alpha, beta );
 }
+
+//去块效应滤波-强滤波器，Bs为4
+//水平（Horizontal）滤波器
+//      边界
+//       |
+// x x x | x x x
 static void deblock_h_luma_intra_c( pixel *pix, intptr_t stride, int alpha, int beta )
 {
     deblock_luma_intra_c( pix, 1, stride, alpha, beta );
@@ -388,18 +432,22 @@ void x264_frame_deblock_row( x264_t *h, int mb_y )
     int chroma_height = 16 >> CHROMA_V_SHIFT;
     intptr_t uvdiff = chroma444 ? h->fdec->plane[2] - h->fdec->plane[1] : 1;
 
+    // 横向逐个块进行deblocking的
     for( int mb_x = 0; mb_x < h->mb.i_mb_width; mb_x += (~b_interlaced | mb_y)&1, mb_y ^= b_interlaced )
     {
+        // [question]看样子这里对fdec做了数据预取的操作以提升性能,待研究
         x264_prefetch_fenc( h, h->fdec, mb_x, mb_y );
+        // load当前块的left/top块的相关情况(是否存在)
         macroblock_cache_load_neighbours_deblock( h, mb_x, mb_y );
 
         int mb_xy = h->mb.i_mb_xy;
         int transform_8x8 = h->mb.mb_transform_size[mb_xy];
-        int intra_cur = IS_INTRA( h->mb.type[mb_xy] );
+        int intra_cur = IS_INTRA( h->mb.type[mb_xy] );  //是否是帧内参考块
         uint8_t (*bs)[8][4] = h->deblock_strength[mb_y&1][h->param.b_sliced_threads?mb_xy:mb_x];
 
-        pixel *pixy = h->fdec->plane[0] + 16*mb_y*stridey  + 16*mb_x;
-        pixel *pixuv = CHROMA_FORMAT ? h->fdec->plane[1] + chroma_height*mb_y*strideuv + 16*mb_x : NULL;
+        //找到像素数据（宏块的大小是16x16）,这里是重建帧的数据
+        pixel *pixy = h->fdec->plane[0] + 16*mb_y*stridey  + 16*mb_x; //宏块的Y分量指针
+        pixel *pixuv = CHROMA_FORMAT ? h->fdec->plane[1] + chroma_height*mb_y*strideuv + 16*mb_x : NULL; //宏块的UV分量指针
 
         if( mb_y & MB_INTERLACED )
         {
@@ -410,10 +458,37 @@ void x264_frame_deblock_row( x264_t *h, int mb_y )
 
         int stride2y  = stridey << MB_INTERLACED;
         int stride2uv = strideuv << MB_INTERLACED;
+    
+        //QP，用于计算环路滤波的门限值alpha和beta
         int qp = h->mb.qp[mb_xy];
         int qpc = h->chroma_qp_table[qp];
         int first_edge_only = (h->mb.partition[mb_xy] == D_16x16 && !h->mb.cbp[mb_xy] && !intra_cur) || qp <= qp_thresh;
 
+        /*
+		 * 滤波顺序如下所示（大方框代表16x16块）
+		 *
+		 * +--4-+--4-+--4-+--4-+
+		 * 0    1    2    3    |
+		 * +--5-+--5-+--5-+--5-+
+		 * 0    1    2    3    |
+		 * +--6-+--6-+--6-+--6-+
+		 * 0    1    2    3    |
+		 * +--7-+--7-+--7-+--7-+
+		 * 0    1    2    3    |
+		 * +----+----+----+----+
+		 *
+		 */
+ 
+        //一个比较长的宏，用于进行环路滤波
+        //根据不同的情况传递不同的参数
+        //几个参数的含义：
+
+        //intra：为“_intra”的时候,其中的“deblock_edge##intra()”展开为函数deblock_edge_intra()
+        //其中的“h->loopf.deblock_luma##intra[dir]”展开为强滤波汇编函数h->loopf.deblock_luma_intra[dir]()
+        //为“”（空,缺省），其中的“deblock_edge##intra()”展开为函数deblock_edge()
+        //其中的“h->loopf.deblock_luma##intra[dir]”展开为普通滤波汇编函数h->loopf.deblock_luma[dir]()
+
+        //dir:决定了滤波的方向：0为水平滤波器（垂直边界），1为垂直滤波器（水平边界）
         #define FILTER( intra, dir, edge, qp, chroma_qp )\
         do\
         {\
@@ -446,8 +521,10 @@ void x264_frame_deblock_row( x264_t *h, int mb_y )
             }\
         } while( 0 )
 
+        //如果存在左侧宏块
         if( h->mb.i_neighbour & MB_LEFT )
         {
+            // b_interlaced == true 帧场自适应(隔行)的部分都跳过,后续再研究
             if( b_interlaced && h->mb.field[h->mb.i_mb_left_xy[0]] != MB_INTERLACED )
             {
                 int luma_qp[2];
@@ -511,34 +588,78 @@ void x264_frame_deblock_row( x264_t *h, int mb_y )
             }
             else
             {
+                // 逐行编码的情况
+                //宏块左边宏块的qp作为参考
                 int qpl = h->mb.qp[h->mb.i_mb_xy-1];
-                int qp_left = (qp + qpl + 1) >> 1;
-                int qpc_left = (qpc + h->chroma_qp_table[qpl] + 1) >> 1;
+                int qp_left = (qp + qpl + 1) >> 1; //亮度qp 取两个qp的平均值作为左侧块的QP参考值
+                int qpc_left = (qpc + h->chroma_qp_table[qpl] + 1) >> 1; //色度qp 取两个qp的平均值
                 int intra_left = IS_INTRA( h->mb.type[h->mb.i_mb_xy-1] );
-                int intra_deblock = intra_cur || intra_left;
+                int intra_deblock = intra_cur || intra_left; //标志位,表示当前宏块或者其左侧的宏块的帧内宏块,需要使用强滤波intra
 
                 /* Any MB that was coded, or that analysis decided to skip, has quality commensurate with its QP.
                  * But if deblocking affects neighboring MBs that were force-skipped, blur might accumulate there.
                  * So reset their effective QP to max, to indicate that lack of guarantee. */
+                /* 翻译: 任何编码过的或决策为skip的MB，都具有与其 QP 相称的质量。
+                 * 但如果deblocking操作影响到被强制跳过的相邻MB，模糊可能会在那里累积。
+                 * 因此将他们的有效QP重置为max，以表明缺乏保证。 
+                */
+                // 这个地方的注释大概意思是对于skip的块做deblocking操作会导致客户端与服务端在跳过的这个块上面数据不一致,导致模糊积累传播
+                // 具体还要整体研究QP的整个机制,后续再研究
                 if( h->fdec->mb_info && M32( bs[0][0] ) )
                 {
 #define RESET_EFFECTIVE_QP(xy) h->fdec->effective_qp[xy] |= 0xff * !!(h->fdec->mb_info[xy] & X264_MBINFO_CONSTANT);
                     RESET_EFFECTIVE_QP(mb_xy);
                     RESET_EFFECTIVE_QP(h->mb.i_mb_left_xy[0]);
                 }
-
+                //如果当前宏块或者其左侧宏块是帧内intra类型的话,本次环路滤波需要采用deblock_edge_intra的强环路滤波
                 if( intra_deblock )
-                    FILTER( _intra, 0, 0, qp_left, qpc_left );
+                    FILTER( _intra, 0, 0, qp_left, qpc_left );//【0】强滤波，水平滤波器（垂直边界）
                 else
-                    FILTER(       , 0, 0, qp_left, qpc_left );
+                    FILTER(       , 0, 0, qp_left, qpc_left );//【0】普通滤波，水平滤波器（垂直边界）
             }
         }
         if( !first_edge_only )
         {
-            FILTER( , 0, 1, qp, qpc );
-            FILTER( , 0, 2, qp, qpc );
-            FILTER( , 0, 3, qp, qpc );
+            //普通滤波，水平滤波器（垂直边界）
+            FILTER( , 0, 1, qp, qpc );//【1】
+            FILTER( , 0, 2, qp, qpc );//【2】
+            FILTER( , 0, 3, qp, qpc );//【3】
         }
+
+		/*
+		// FILTER展开(其中一种展开)
+        #define FILTER( intra, dir, edge, qp, chroma_qp )
+        do
+        {
+            if( !(edge & 1) || !transform_8x8 )
+            {
+                deblock_edge_intra( h, pixy + 4*edge*(dir?stride2y:1),
+                                     stride2y, bs[dir][edge], qp, a, b, 0,
+                                     h->loopf.deblock_luma_intra[dir] );
+                if( chroma_format == CHROMA_444 )
+                {
+                    deblock_edge_intra( h, pixuv          + 4*edge*(dir?stride2uv:1),
+                                         stride2uv, bs[dir][edge], chroma_qp, a, b, 0,
+                                         h->loopf.deblock_luma_intra[dir] );
+                    deblock_edge_intra( h, pixuv + uvdiff + 4*edge*(dir?stride2uv:1),
+                                         stride2uv, bs[dir][edge], chroma_qp, a, b, 0,
+                                         h->loopf.deblock_luma_intra[dir] );
+                }
+                else if( chroma_format == CHROMA_420 && !(edge & 1) )
+                {
+                    deblock_edge_intra( h, pixuv + edge*(dir?2*stride2uv:4),
+                                         stride2uv, bs[dir][edge], chroma_qp, a, b, 1,
+                                         h->loopf.deblock_luma_intra[dir] );
+                }
+            }
+            if( chroma_format == CHROMA_422 && (dir || !(edge & 1)) )
+            {
+                deblock_edge_intra( h, pixuv + edge*(dir?4*stride2uv:4),
+                                     stride2uv, bs[dir][edge], chroma_qp, a, b, 1,
+                                     h->loopf.deblock_luma_intra[dir] );
+            }
+        } while( 0 );
+        */
 
         if( h->mb.i_neighbour & MB_TOP )
         {

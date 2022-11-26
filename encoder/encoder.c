@@ -2419,7 +2419,7 @@ static void fdec_filter_row( x264_t *h, int mb_y, int pass )
     int b_deblock = h->sh.i_disable_deblocking_filter_idc != 1;
     int b_end = mb_y == h->i_threadslice_end;
     int b_measure_quality = 1;
-    int min_y = mb_y - (1 << SLICE_MBAFF);
+    int min_y = mb_y - (1 << SLICE_MBAFF); //min_y实际上就是上一行的宏块级y坐标
     int b_start = min_y == h->i_threadslice_start;
     /* Even in interlaced mode, deblocking never modifies more than 4 pixels
      * above each MB, as bS=4 doesn't happen for the top of interlaced mbpairs. */
@@ -2455,9 +2455,10 @@ static void fdec_filter_row( x264_t *h, int mb_y, int pass )
     if( min_y < h->i_threadslice_start )
         return;
 
+    //去块效应滤波,也就是对刚刚完成编码和重建的上面一整行做deblock,min_y就是上面的1行或者2行(2行是帧场自适应的情况)
     if( b_deblock )
         for( int y = min_y; y < mb_y; y += (1 << SLICE_MBAFF) )
-            x264_frame_deblock_row( h, y );
+            x264_frame_deblock_row( h, y ); //deblock的主要实现函数
 
     /* FIXME: Prediction requires different borders for interlaced/progressive mc,
      * but the actual image data is equivalent. For now, maintain this
@@ -2471,13 +2472,16 @@ static void fdec_filter_row( x264_t *h, int mb_y, int pass )
 
     if( h->fdec->b_kept_as_ref && (!h->param.b_sliced_threads || pass == 1) )
         x264_frame_expand_border( h, h->fdec, min_y );
+
+    //半像素内插
     if( b_hpel )
     {
         int end = mb_y == h->mb.i_mb_height;
         /* Can't do hpel until the previous slice is done encoding. */
         if( h->param.analyse.i_subpel_refine )
         {
-            x264_frame_filter( h, h->fdec, min_y, end );
+            //半像素内插
+            x264_frame_filter( h, h->fdec, min_y, end );//半像素内插的主要实现函数
             x264_frame_expand_border_filtered( h, h->fdec, min_y, end );
         }
     }
@@ -2492,11 +2496,22 @@ static void fdec_filter_row( x264_t *h, int mb_y, int pass )
     if( h->i_thread_frames > 1 && h->fdec->b_kept_as_ref )
         x264_frame_cond_broadcast( h->fdec, mb_y*16 + (b_end ? 10000 : -(X264_THREAD_HEIGHT << SLICE_MBAFF)) );
 
+    //计算编码的质量
     if( b_measure_quality )
     {
         maxpix_y = X264_MIN( maxpix_y, h->param.i_height );
         if( h->param.analyse.b_psnr )
         {
+        	//实际上是计算SSD
+        	//输出的时候调用x264_psnr()换算SSD为PSNR
+        	/**
+        	 * 计算PSNR的过程
+        	 *
+        	 * MSE = SSD*1/(w*h)
+        	 * PSNR= 10*log10(MAX^2/MSE)
+        	 *
+        	 * 其中MAX指的是图像的灰度级，对于8bit来说就是2^8-1=255
+        	 */
             for( int p = 0; p < (CHROMA444 ? 3 : 1); p++ )
                 h->stat.frame.i_ssd[p] += x264_pixel_ssd_wxh( &h->pixf,
                     h->fdec->plane[p] + minpix_y * h->fdec->i_stride[p], h->fdec->i_stride[p],
@@ -2515,6 +2530,7 @@ static void fdec_filter_row( x264_t *h, int mb_y, int pass )
             }
         }
 
+        //如果需要打印输出SSIM
         if( h->param.analyse.b_ssim )
         {
             int ssim_cnt;
@@ -2522,6 +2538,7 @@ static void fdec_filter_row( x264_t *h, int mb_y, int pass )
             /* offset by 2 pixels to avoid alignment of ssim blocks with dct blocks,
              * and overlap by 4 */
             minpix_y += b_start ? 2 : -6;
+            //计算SSIM
             h->stat.frame.f_ssim +=
                 x264_pixel_ssim_wxh( &h->pixf,
                     h->fdec->plane[0] + 2+minpix_y*h->fdec->i_stride[0], h->fdec->i_stride[0],
@@ -2751,9 +2768,17 @@ static ALWAYS_INLINE void bitstream_restore( x264_t *h, x264_bs_bak_t *bak, int 
     }
 }
 
+
+/****************************************************************************
+ * 真正的编码——编码1个Slice
+ * 注释和处理：雷霄骅
+ * http://blog.csdn.net/leixiaohua1020
+ * leixiaohua1020@126.com
+ ****************************************************************************/
 static intptr_t slice_write( x264_t *h )
 {
     int i_skip;
+    //宏块的序号，以及序号对应的x，y坐标
     int mb_xy, i_mb_x, i_mb_y;
     /* NALUs other than the first use a 3-byte startcode.
      * Add one extra byte for the rbsp, and one more for the final CABAC putbyte.
@@ -2778,12 +2803,17 @@ static intptr_t slice_write( x264_t *h )
     bs_realign( &h->out.bs );
 
     /* Slice */
-// （1）调用x264_nal_start()开始输出一个NALU。
+    //（1）调用x264_nal_start()开始输出一个NALU。
+    // 后面对应着x264_nal_end()
     nal_start( h, h->i_nal_type, h->i_nal_ref_idc );
     h->out.nal[h->out.i_nal].i_first_mb = h->sh.i_first_mb;
 
     /* Slice header */
-//（2）初始化宏块重建像素数据缓存fdec_buf[]和编码像素数据缓存fenc_buf[]
+    //（2）初始化宏块重建像素数据缓存fdec_buf[]和编码像素数据缓存fenc_buf[]
+    //存储宏块像素的缓存fdec_buf和fenc_buf的初始化
+    //宏块编码缓存p_fenc[0]，p_fenc[1]，p_fenc[2]
+    //宏块重建缓存p_fdec[0]，p_fdec[1]，p_fdec[2]
+    //[0]存Y，[1]存U，[2]存V
     x264_macroblock_thread_init( h );
     //x264_macroblock_thread_init()设定了宏块编码数据指针p_fenc[0]，p_fenc[1]，p_fenc[2]在fenc_buf[]中的位置，
     //以及宏块重建数据指针p_fdec[0]，p_fdec[1]，p_fdec[2] 在fdec_buf[]中的位置
@@ -2794,8 +2824,9 @@ static intptr_t slice_write( x264_t *h )
     h->sh.i_qp = SPEC_QP( h->sh.i_qp );
     h->sh.i_qp_delta = h->sh.i_qp - h->pps->i_pic_init_qp;
 
-// （3）调用x264_slice_header_write()输出 Slice Header。
+    //（3）调用x264_slice_header_write()输出 Slice Header。
     slice_header_write( &h->out.bs, &h->sh, h->i_nal_ref_idc );
+    //如果使用CABAC，需要初始化
     if( h->param.b_cabac )
     {
         /* alignment needed */
@@ -2812,7 +2843,9 @@ static intptr_t slice_write( x264_t *h )
     h->mb.i_last_dqp = 0;
     h->mb.field_decoding_flag = 0;
 
+    // 宏块位置-纵坐标（初始值）
     i_mb_y = h->sh.i_first_mb / h->mb.i_mb_width;
+    // 宏块位置-横坐标（初始值）
     i_mb_x = h->sh.i_first_mb % h->mb.i_mb_width;
     i_skip = 0;
 
@@ -2827,15 +2860,23 @@ static intptr_t slice_write( x264_t *h )
 			//对角线半像素内差点存储在x264_frame_t的filtered[][3]中
 			//（整像素点存储在x264_frame_t的filtered[][0]中）。
 	    //（3）视频质量SSIM和PSNR计算。PSNR在这里只计算了SSD，通过调用x264_pixel_ssd_wxh()实现；SSIM的计算则是通过x264_pixel_ssim_wxh()实现。
+
+        // 宏块序号,也是宏块偏移,这里是相对于slice来说的。由i_mb_x和i_mb_y计算而来
         mb_xy = i_mb_x + i_mb_y * h->mb.i_mb_width;
         int mb_spos = bs_pos(&h->out.bs) + x264_cabac_pos(&h->cabac);
 
+        // 实际上这里的滤波与半像素插值操作都是针对一行宏块编码并且重建好了之后下一列正要开始的时候进行的
+        // 这里if( i_mb_x == 0 )就说明了这一点，对上一行的所有宏块做deblock去除块效应，之后在做半像素插值
+        // 这里半像素插值预先做好是为了之后重建帧作为参考帧使用时不需要在计算1/2像素的情况,然而1/4像素还是需要现场计算的
         if( i_mb_x == 0 )
         {
             if( bitstream_check_buffer( h ) )
                 return -1;
             if( !(i_mb_y & SLICE_MBAFF) && h->param.rc.i_vbv_buffer_size )
                 bitstream_backup( h, &bs_bak[BS_BAK_ROW_VBV], i_skip, 1 );
+            //对重建帧做去块效应滤波、半像素插值、SSIM/PSNR计算等
+            //一次处理一行宏块
+            //这个函数操作也属于主流程环节中的一个,需要研究
             if( !h->mb.b_reencode_mb )
                 fdec_filter_row( h, i_mb_y, 0 );
         }

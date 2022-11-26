@@ -499,7 +499,7 @@ struct x264_t
         int     i_mb_type_left[2];
         int     i_mb_type_topleft;
         int     i_mb_type_topright;
-        int     i_mb_prev_xy;
+        int     i_mb_prev_xy; // 猜测表示当前宏块的上一个宏块的宏块级偏移
         int     i_mb_left_xy[2]; // 表示在以宏块为单位的列表中侧相邻宏块, 注意这里左侧相邻总共有两个, 0为左侧靠上, 1为左侧靠下(这里区别于左上/左下), 左侧靠下应该只有b_mbaff==1的时候存在
         int     i_mb_top_xy; // i_mb_xy = i_mb_y * h->mb.i_mb_stride + i_mb_x; 得到MB相对于当前帧起始宏块的偏移位置(以宏块为单位)，其中h->mb.i_mb_stride为原始数据以MB为单位的宽度
         int     i_mb_topleft_xy; // --得到当前MB上一个MB的宏块偏移
@@ -564,7 +564,7 @@ struct x264_t
         int ip_offset; /* Used by PIR to offset the quantizer of intra-refresh blocks. */
         int b_deblock_rdo;
         int b_overflow; /* If CAVLC had a level code overflow during bitstream writing. */
-
+        // pic结构体
         struct
         {
             /* space for p_fenc and p_fdec */
@@ -703,6 +703,7 @@ struct x264_t
         // non_zero_count：DCT的非0系数个数的缓存
         // mv：运动矢量缓存
         // ref：运动矢量参考帧的缓存
+        // cache结构体
         struct
         {
             /* real intra4x4_pred_mode if I_4X4 or I_8X8, I_PRED_4x4_DC if mb available, -1 if not */

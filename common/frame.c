@@ -84,7 +84,7 @@ static x264_frame_t *frame_new( x264_t *h, int b_fdec )
     /* allocate frame data (+64 for extra data for me) */
     i_width  = h->mb.i_mb_width*16;
     i_lines  = h->mb.i_mb_height*16;
-    i_stride = align_stride( i_width + PADH2, align, disalign );
+    i_stride = align_stride( i_width + PADH2, align, disalign ); //[question]对于为什么在原始数据上面stride要加上96还需要后续研究一下
 
     if( i_csp == X264_CSP_NV12 || i_csp == X264_CSP_NV16 )
     {

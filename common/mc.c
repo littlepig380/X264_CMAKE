@@ -167,22 +167,92 @@ static void mc_copy( pixel *src, intptr_t i_src_stride, pixel *dst, intptr_t i_d
     }
 }
 
+/* 
+半像素插值公式
+b= (E - 5F + 20G + 20H - 5I + J)/32
+             x
+d==1，水平滤波器；d==stride，垂直滤波器（这里没有除以32）
+*/
 #define TAPFILTER(pix, d) ((pix)[x-2*d] + (pix)[x+3*d] - 5*((pix)[x-d] + (pix)[x+2*d]) + 20*((pix)[x] + (pix)[x+d]))
+
+/*
+ * 半像素插值
+ * dsth：水平滤波得到的半像素点(aa,bb,b,s,gg,hh)
+ * dstv：垂直滤波的到的半像素点(cc,dd,h,m,ee,ff)
+ * dstc：“水平+垂直”滤波得到的位于4个像素中间的半像素点（j）
+ *
+ * 半像素插值示意图如下：
+ *
+ *         A aa B
+ *
+ *         C bb D
+ *
+ * E   F   G  b H   I   J
+ *
+ * cc  dd  h  j m  ee  ff
+ *
+ * K   L   M  s N   P   Q
+ *
+ *         R gg S
+ *
+ *         T hh U
+ *
+ * 计算公式如下：
+ * b=round( (E - 5F + 20G + 20H - 5I + J ) / 32)
+ *
+ * 剩下几个半像素点的计算关系如下：
+ * m：由B、D、H、N、S、U计算
+ * h：由A、C、G、M、R、T计算
+ * s：由K、L、M、N、P、Q计算
+ * j：由cc、dd、h、m、ee、ff计算。需要注意j点的运算量比较大，因为cc、dd、ee、ff都需要通过半像素内插方法进行计算。
+ *
+ */
+
 static void hpel_filter( pixel *dsth, pixel *dstv, pixel *dstc, pixel *src,
                          intptr_t stride, int width, int height, int16_t *buf )
 {
     const int pad = (BIT_DEPTH > 9) ? (-10 * PIXEL_MAX) : 0;
+    /*
+     * 几种半像素点之间的位置关系
+     *
+     * X： 像素点
+     * H：水平滤波半像素点
+     * V：垂直滤波半像素点
+     * C： 中间位置半像素点
+     *
+	 * X   H   X       X       X
+	 *
+	 * V   C
+	 *
+	 * X       X       X       X
+	 *
+	 *
+	 *
+	 * X       X       X       X
+	 *
+	 */
+    //滤波是一行一行处理
     for( int y = 0; y < height; y++ )
     {
-        for( int x = -2; x < width+3; x++ )
+    	//一个一个点处理
+    	//每个整像素点都对应h，v，c三个半像素点
+
+    	//首先是垂直垂直滤波,垂直滤波需要宏块向左和向右扩展2个像素,这个需要注意
+        for( int x = -2; x < width+3; x++ )//(aa,bb,b,s,gg,hh),结果存入buf
         {
+        	//垂直滤波半像素点
             int v = TAPFILTER(src,stride);
             dstv[x] = x264_clip_pixel( (v + 16) >> 5 );
             /* transform v for storage in a 16-bit integer */
+            //这应该是给dstc计算使用的,这里的buf是可以用来存储任何临时结果的,这里保存的结果是没有>>5也就是没有除以32的
             buf[x+2] = v + pad;
         }
+
+        //斜对角位置的半像素,是通过垂直半像素计算出来的,上一次的计算没有>>5(除以32)所以这里要>>10一次性做完
         for( int x = 0; x < width; x++ )
             dstc[x] = x264_clip_pixel( (TAPFILTER(buf+2,1) - 32*pad + 512) >> 10 );
+
+        //水平滤波半像素点
         for( int x = 0; x < width; x++ )
             dsth[x] = x264_clip_pixel( (TAPFILTER(src,1) + 16) >> 5 );
         dsth += stride;
@@ -821,12 +891,12 @@ void x264_frame_filter( x264_t *h, x264_frame_t *frame, int mb_y, int b_end )
         int stride = frame->i_stride[p];
         const int width = frame->i_width[p];
         int offs = start*stride - 8; // buffer = 3 for 6tap, aligned to 8 for simd
-
+        //半像素内插
         if( !b_interlaced || h->mb.b_adaptive_mbaff )
             h->mc.hpel_filter(
-                frame->filtered[p][1] + offs,
-                frame->filtered[p][2] + offs,
-                frame->filtered[p][3] + offs,
+                frame->filtered[p][1] + offs,//水平半像素内插
+                frame->filtered[p][2] + offs,//垂直半像素内插
+                frame->filtered[p][3] + offs,//中间半像素内插
                 frame->plane[p] + offs,
                 stride, width + 16, height - start,
                 h->scratch_buffer );

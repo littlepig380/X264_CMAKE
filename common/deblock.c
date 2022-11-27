@@ -477,18 +477,25 @@ void x264_frame_deblock_row( x264_t *h, int mb_y )
 		 * 0    1    2    3    |
 		 * +----+----+----+----+
 		 *
+         * 滤波是以4*4的宏块为基本单位,上图表示是每次滤波的边界,先进行水平滤波(所以边界是垂直的),然后进行垂直滤波
+         * 但是这里滤波不是针对整个4*4的块的全部像素进行滤波,滤波仅仅在4*4的块的边缘进行,
+         * 4*4的块的水平滤波是针对该块的最左侧一列来操作的,因此是上面说所的垂直边界
+         * 也就是每一个需要进行deblock的4*4的块,只对其左边缘和上边缘进行操作,这里阅读可以留意对应一下
 		 */
- 
-        //一个比较长的宏，用于进行环路滤波
-        //根据不同的情况传递不同的参数
-        //几个参数的含义：
 
-        //intra：为“_intra”的时候,其中的“deblock_edge##intra()”展开为函数deblock_edge_intra()
-        //其中的“h->loopf.deblock_luma##intra[dir]”展开为强滤波汇编函数h->loopf.deblock_luma_intra[dir]()
-        //为“”（空,缺省），其中的“deblock_edge##intra()”展开为函数deblock_edge()
-        //其中的“h->loopf.deblock_luma##intra[dir]”展开为普通滤波汇编函数h->loopf.deblock_luma[dir]()
-
-        //dir:决定了滤波的方向：0为水平滤波器（垂直边界），1为垂直滤波器（水平边界）
+	    /* 
+         * 一个比较长的宏，用于进行环路滤波
+         * 根据不同的情况传递不同的参数
+         * 几个参数的含义
+         * intra：为“_intra”的时候,其中的“deblock_edge##intra()”展开为函数deblock_edge_intra()
+         * 其中的“h->loopf.deblock_luma##intra[dir]”展开为强滤波汇编函数h->loopf.deblock_luma_intra[dir]()
+         * 为“”（空,缺省），其中的“deblock_edge##intra()”展开为函数deblock_edge()
+         * 其中的“h->loopf.deblock_luma##intra[dir]”展开为普通滤波汇编函数h->loopf.deblock_luma[dir]()
+         * 
+		 * “intra”指定了是普通滤波（Bs=1，2，3）还是强滤波（Bs=4）;
+		 * “dir”指定了滤波器的方向。0为水平滤波器（垂直边界），1为垂直滤波器（水平边界）;
+		 * “edge”指定了边界的位置。“0”，“1”，“2”，“3”分别代表了水平（或者垂直）的4条边界;
+		 */
         #define FILTER( intra, dir, edge, qp, chroma_qp )\
         do\
         {\
@@ -611,13 +618,20 @@ void x264_frame_deblock_row( x264_t *h, int mb_y )
                     RESET_EFFECTIVE_QP(mb_xy);
                     RESET_EFFECTIVE_QP(h->mb.i_mb_left_xy[0]);
                 }
-                //如果当前宏块或者其左侧宏块是帧内intra类型的话,本次环路滤波需要采用deblock_edge_intra的强环路滤波
+                /* 如果当前宏块或者其左侧宏块是帧内intra类型的话,
+                最左侧一列的点的环路滤波需要采用deblock_edge_intra的强环路滤波
+                此时的环路滤波deblock是一次性针对16个点也就是16*16宏块的最左侧一列进行的
+                弱环路滤波也是一次性进行16个点的滤波,但是以4个为一组,总共4组,其中还可能根据情况的不同跳过一些组*/
                 if( intra_deblock )
                     FILTER( _intra, 0, 0, qp_left, qpc_left );//【0】强滤波，水平滤波器（垂直边界）
                 else
                     FILTER(       , 0, 0, qp_left, qpc_left );//【0】普通滤波，水平滤波器（垂直边界）
             }
         }
+        /*
+         * 这里我理解为如果当前宏块没有左邻块,那么环路滤波从第二个4*4是子块开始
+         * 就是说帧的最边缘是不是做相关的deblock滤波的,因为没有-1,-2像素索引,没有采用镜像对折的信号处理手段
+         */
         if( !first_edge_only )
         {
             //普通滤波，水平滤波器（垂直边界）
@@ -661,6 +675,8 @@ void x264_frame_deblock_row( x264_t *h, int mb_y )
         } while( 0 );
         */
 
+        /* 反过来,纵向的滤波是水平的边界,还要区分是否有顶块的情况,也就是是不是帧的最上边的块
+        这里先跳过帧场自适应的部分,后续再研究 */
         if( h->mb.i_neighbour & MB_TOP )
         {
             if( b_interlaced && !(mb_y&1) && !MB_INTERLACED && h->mb.field[h->mb.i_mb_top_xy] )
@@ -709,7 +725,7 @@ void x264_frame_deblock_row( x264_t *h, int mb_y )
                 else
                 {
                     if( intra_deblock )
-                        M32( bs[1][0] ) = 0x03030303;
+                        M32( bs[1][0] ) = 0x03030303; //[question]这个是什么意思尚不明确,需要仔细研究一下
                     FILTER(       , 1, 0, qp_top, qpc_top );
                 }
             }

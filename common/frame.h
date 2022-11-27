@@ -29,8 +29,8 @@
 #define X264_FRAME_H
 
 /* number of pixels past the edge of the frame, for motion estimation/compensation */
-#define PADH 32
-#define PADV 32
+#define PADH 32 // 水平方向像素填充数目
+#define PADV 32 // 垂直方向像素填充数目
 #define PADH_ALIGN X264_MAX( PADH, NATIVE_ALIGN / SIZEOF_PIXEL )
 #define PADH2 (PADH_ALIGN + PADH)
 

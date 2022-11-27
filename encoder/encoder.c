@@ -2455,7 +2455,43 @@ static void fdec_filter_row( x264_t *h, int mb_y, int pass )
     if( min_y < h->i_threadslice_start )
         return;
 
+    /* 环路滤波分类
+    环路滤波器根据滤波的强度可以分为两种：
+    （1）普通滤波器。针对边界的Bs（边界强度）为1、2、3的滤波器。此时环路滤波涉及到方块边界周围的6个点（边界两边各3个点）：p2，p1，p0，q0，q1，q2。需要处理4个点（边界两边各2个点，只以p点为例）：
+    p0’ = p0 + (((q0 - p0 ) << 2) + (p1 - q1) + 4) >> 3
+    p1’ = ( p2 + ( ( p0 + q0 + 1 ) >> 1) – 2p1 ) >> 1
+    （2）强滤波器。针对边界的Bs（边界强度）为4的滤波器。此时环路滤波涉及到方块边界周围的8个点（边界两边各4个点）：p3，p2，p1，p0，q0，q1，q2，q3。需要处理6个点（边界两边各3个点，只以p点为例）：
+    p0’ = ( p2 + 2*p1 + 2*p0 + 2*q0 + q1 + 4 ) >> 3
+    p1’ = ( p2 + p1 + p0 + q0 + 2 ) >> 2
+    p2’ = ( 2*p3 + 3*p2 + p1 + p0 + q0 + 4 ) >> 3
+    其中上文中提到的边界强度Bs的判定方式如下。
+    条件（针对两边的图像块）
+    有一个块为帧内预测 + 边界为宏块边界 4
+    有一个块为帧内预测 3
+    有一个块对残差编码 2
+    运动矢量差不小于1像素 1
+    运动补偿参考帧不同 1
+    其它 0 
+    
+    环路滤波的门限
+    并不是所有的块的边界处都需要环路滤波。
+    例如画面中物体的边界正好和块的边界重合的话，就不能进行滤波，
+    否则会使画面中物体的边界变模糊。因此需要区别开物体边界和块效应边界。
+    一般情况下，物体边界两边的像素值差别很大，而块效应边界两边像素值差别比较小。
+    《H.264标准》以这个特点定义了2个变量alpha和beta来判决边界是否需要进行环路滤波。
+    只有满足下面三个条件的时候才能进行环路滤波：
+    | p0 - q0 | < alpha
+    | p1 – p0 | < beta
+    | q1 - q0 | < beta
+    简而言之，就是边界两边的两个点的像素值不能太大，即不能超过alpha；
+    边界一边的前两个点之间的像素值也不能太大，即不能超过beta。
+    其中alpha和beta是根据量化参数QP推算出来（具体方法不再记录）。
+    总体说来QP越大，alpha和beta的值也越大，也就越容易触发环路滤波。
+    由于QP越大表明压缩的程度越大，所以也可以得知高压缩比的情况下更需要进行环路滤波。
+    */
+
     //去块效应滤波,也就是对刚刚完成编码和重建的上面一整行做deblock,min_y就是上面的1行或者2行(2行是帧场自适应的情况)
+    //环路滤波只针对以4*4的小块的边缘操作,不是针对整个块中所有像素
     if( b_deblock )
         for( int y = min_y; y < mb_y; y += (1 << SLICE_MBAFF) )
             x264_frame_deblock_row( h, y ); //deblock的主要实现函数
@@ -2463,6 +2499,7 @@ static void fdec_filter_row( x264_t *h, int mb_y, int pass )
     /* FIXME: Prediction requires different borders for interlaced/progressive mc,
      * but the actual image data is equivalent. For now, maintain this
      * consistency by copying deblocked pixels between planes. */
+    //帧场自适应的部分暂时跳过后续研究
     if( PARAM_INTERLACED && (!h->param.b_sliced_threads || pass == 1) )
         for( int p = 0; p < h->fdec->i_plane; p++ )
             for( int i = minpix_y>>(CHROMA_V_SHIFT && p); i < maxpix_y>>(CHROMA_V_SHIFT && p); i++ )
@@ -2471,7 +2508,7 @@ static void fdec_filter_row( x264_t *h, int mb_y, int pass )
                         h->mb.i_mb_width*16*SIZEOF_PIXEL );
 
     if( h->fdec->b_kept_as_ref && (!h->param.b_sliced_threads || pass == 1) )
-        x264_frame_expand_border( h, h->fdec, min_y );
+        x264_frame_expand_border( h, h->fdec, min_y ); //[question]帧边界扩展,实际上就是数字图像处理中常用的边缘处理方法,边缘镜像扩展,不太理解这里为什么需要padding,有时间再研究
 
     //半像素内插
     if( b_hpel )
@@ -2481,8 +2518,8 @@ static void fdec_filter_row( x264_t *h, int mb_y, int pass )
         if( h->param.analyse.i_subpel_refine )
         {
             //半像素内插
-            x264_frame_filter( h, h->fdec, min_y, end );//半像素内插的主要实现函数
-            x264_frame_expand_border_filtered( h, h->fdec, min_y, end );
+            x264_frame_filter( h, h->fdec, min_y, end );//半像素内插的主要实现函数,对角->水平->垂直
+            x264_frame_expand_border_filtered( h, h->fdec, min_y, end ); //[question]为滤波进行的边界扩展,不太理解这里为什么需要padding,待研究
         }
     }
 

@@ -2457,14 +2457,14 @@ static void fdec_filter_row( x264_t *h, int mb_y, int pass )
 
     /* 环路滤波分类
     环路滤波器根据滤波的强度可以分为两种：
-    （1）普通滤波器。针对边界的Bs（边界强度）为1、2、3的滤波器。此时环路滤波涉及到方块边界周围的6个点（边界两边各3个点）：p2，p1，p0，q0，q1，q2。需要处理4个点（边界两边各2个点，只以p点为例）：
+    （1）普通滤波器.针对边界的Bs（边界强度）为1、2、3的滤波器.此时环路滤波涉及到方块边界周围的6个点（边界两边各3个点）：p2,p1,p0,q0,q1,q2.需要处理4个点（边界两边各2个点,只以p点为例）：
     p0’ = p0 + (((q0 - p0 ) << 2) + (p1 - q1) + 4) >> 3
     p1’ = ( p2 + ( ( p0 + q0 + 1 ) >> 1) – 2p1 ) >> 1
-    （2）强滤波器。针对边界的Bs（边界强度）为4的滤波器。此时环路滤波涉及到方块边界周围的8个点（边界两边各4个点）：p3，p2，p1，p0，q0，q1，q2，q3。需要处理6个点（边界两边各3个点，只以p点为例）：
+    （2）强滤波器.针对边界的Bs（边界强度）为4的滤波器.此时环路滤波涉及到方块边界周围的8个点（边界两边各4个点）：p3,p2,p1,p0,q0,q1,q2,q3.需要处理6个点（边界两边各3个点,只以p点为例）：
     p0’ = ( p2 + 2*p1 + 2*p0 + 2*q0 + q1 + 4 ) >> 3
     p1’ = ( p2 + p1 + p0 + q0 + 2 ) >> 2
     p2’ = ( 2*p3 + 3*p2 + p1 + p0 + q0 + 4 ) >> 3
-    其中上文中提到的边界强度Bs的判定方式如下。
+    其中上文中提到的边界强度Bs的判定方式如下.
     条件（针对两边的图像块）
     有一个块为帧内预测 + 边界为宏块边界 4
     有一个块为帧内预测 3
@@ -2474,20 +2474,20 @@ static void fdec_filter_row( x264_t *h, int mb_y, int pass )
     其它 0 
     
     环路滤波的门限
-    并不是所有的块的边界处都需要环路滤波。
-    例如画面中物体的边界正好和块的边界重合的话，就不能进行滤波，
-    否则会使画面中物体的边界变模糊。因此需要区别开物体边界和块效应边界。
-    一般情况下，物体边界两边的像素值差别很大，而块效应边界两边像素值差别比较小。
-    《H.264标准》以这个特点定义了2个变量alpha和beta来判决边界是否需要进行环路滤波。
+    并不是所有的块的边界处都需要环路滤波.
+    例如画面中物体的边界正好和块的边界重合的话,就不能进行滤波,
+    否则会使画面中物体的边界变模糊.因此需要区别开物体边界和块效应边界.
+    一般情况下,物体边界两边的像素值差别很大,而块效应边界两边像素值差别比较小.
+    《H.264标准》以这个特点定义了2个变量alpha和beta来判决边界是否需要进行环路滤波.
     只有满足下面三个条件的时候才能进行环路滤波：
     | p0 - q0 | < alpha
     | p1 – p0 | < beta
     | q1 - q0 | < beta
-    简而言之，就是边界两边的两个点的像素值不能太大，即不能超过alpha；
-    边界一边的前两个点之间的像素值也不能太大，即不能超过beta。
-    其中alpha和beta是根据量化参数QP推算出来（具体方法不再记录）。
-    总体说来QP越大，alpha和beta的值也越大，也就越容易触发环路滤波。
-    由于QP越大表明压缩的程度越大，所以也可以得知高压缩比的情况下更需要进行环路滤波。
+    简而言之,就是边界两边的两个点的像素值不能太大,即不能超过alpha；
+    边界一边的前两个点之间的像素值也不能太大,即不能超过beta.
+    其中alpha和beta是根据量化参数QP推算出来（具体方法不再记录）.
+    总体说来QP越大,alpha和beta的值也越大,也就越容易触发环路滤波.
+    由于QP越大表明压缩的程度越大,所以也可以得知高压缩比的情况下更需要进行环路滤波.
     */
 
     //去块效应滤波,也就是对刚刚完成编码和重建的上面一整行做deblock,min_y就是上面的1行或者2行(2行是帧场自适应的情况)
@@ -2547,7 +2547,7 @@ static void fdec_filter_row( x264_t *h, int mb_y, int pass )
         	 * MSE = SSD*1/(w*h)
         	 * PSNR= 10*log10(MAX^2/MSE)
         	 *
-        	 * 其中MAX指的是图像的灰度级，对于8bit来说就是2^8-1=255
+        	 * 其中MAX指的是图像的灰度级,对于8bit来说就是2^8-1=255
         	 */
             for( int p = 0; p < (CHROMA444 ? 3 : 1); p++ )
                 h->stat.frame.i_ssd[p] += x264_pixel_ssd_wxh( &h->pixf,
@@ -2815,7 +2815,7 @@ static ALWAYS_INLINE void bitstream_restore( x264_t *h, x264_bs_bak_t *bak, int 
 static intptr_t slice_write( x264_t *h )
 {
     int i_skip;
-    //宏块的序号，以及序号对应的x，y坐标
+    //宏块的序号,以及序号对应的x,y坐标
     int mb_xy, i_mb_x, i_mb_y;
     /* NALUs other than the first use a 3-byte startcode.
      * Add one extra byte for the rbsp, and one more for the final CABAC putbyte.
@@ -2840,7 +2840,7 @@ static intptr_t slice_write( x264_t *h )
     bs_realign( &h->out.bs );
 
     /* Slice */
-    //（1）调用x264_nal_start()开始输出一个NALU。
+    //（1）调用x264_nal_start()开始输出一个NALU.
     // 后面对应着x264_nal_end()
     nal_start( h, h->i_nal_type, h->i_nal_ref_idc );
     h->out.nal[h->out.i_nal].i_first_mb = h->sh.i_first_mb;
@@ -2848,12 +2848,12 @@ static intptr_t slice_write( x264_t *h )
     /* Slice header */
     //（2）初始化宏块重建像素数据缓存fdec_buf[]和编码像素数据缓存fenc_buf[]
     //存储宏块像素的缓存fdec_buf和fenc_buf的初始化
-    //宏块编码缓存p_fenc[0]，p_fenc[1]，p_fenc[2]
-    //宏块重建缓存p_fdec[0]，p_fdec[1]，p_fdec[2]
-    //[0]存Y，[1]存U，[2]存V
+    //宏块编码缓存p_fenc[0],p_fenc[1],p_fenc[2]
+    //宏块重建缓存p_fdec[0],p_fdec[1],p_fdec[2]
+    //[0]存Y,[1]存U,[2]存V
     x264_macroblock_thread_init( h );
-    //x264_macroblock_thread_init()设定了宏块编码数据指针p_fenc[0]，p_fenc[1]，p_fenc[2]在fenc_buf[]中的位置，
-    //以及宏块重建数据指针p_fdec[0]，p_fdec[1]，p_fdec[2] 在fdec_buf[]中的位置
+    //x264_macroblock_thread_init()设定了宏块编码数据指针p_fenc[0],p_fenc[1],p_fenc[2]在fenc_buf[]中的位置,
+    //以及宏块重建数据指针p_fdec[0],p_fdec[1],p_fdec[2] 在fdec_buf[]中的位置
 
     /* Set the QP equal to the first QP in the slice for more accurate CABAC initialization. */
     h->mb.i_mb_xy = h->sh.i_first_mb;
@@ -2861,9 +2861,9 @@ static intptr_t slice_write( x264_t *h )
     h->sh.i_qp = SPEC_QP( h->sh.i_qp );
     h->sh.i_qp_delta = h->sh.i_qp - h->pps->i_pic_init_qp;
 
-    //（3）调用x264_slice_header_write()输出 Slice Header。
+    //（3）调用x264_slice_header_write()输出 Slice Header.
     slice_header_write( &h->out.bs, &h->sh, h->i_nal_ref_idc );
-    //如果使用CABAC，需要初始化
+    //如果使用CABAC,需要初始化
     if( h->param.b_cabac )
     {
         /* alignment needed */
@@ -2886,24 +2886,24 @@ static intptr_t slice_write( x264_t *h )
     i_mb_x = h->sh.i_first_mb % h->mb.i_mb_width;
     i_skip = 0;
 
-    // 进入一个循环，该循环每执行一遍编码一个宏块
+    // 进入一个循环,该循环每执行一遍编码一个宏块
     while( 1 )
     {
-	// a) 每处理一行宏块，调用一次x264_fdec_filter_row()执行滤波模块。
-	    //（1）环路滤波（去块效应滤波）。通过调用x264_frame_deblock_row()实现。
-	    //（2）半像素内插。通过调用x264_frame_filter()实现。
-			//经过汇编半像素内插函数处理之后，得到的水平半像素内差点存储在x264_frame_t的filtered[][1]中，
-			//垂直半像素内差点存储在x264_frame_t的filtered[][2]中，
+	// a) 每处理一行宏块,调用一次x264_fdec_filter_row()执行滤波模块.
+	    //（1）环路滤波（去块效应滤波）.通过调用x264_frame_deblock_row()实现.
+	    //（2）半像素内插.通过调用x264_frame_filter()实现.
+			//经过汇编半像素内插函数处理之后,得到的水平半像素内差点存储在x264_frame_t的filtered[][1]中,
+			//垂直半像素内差点存储在x264_frame_t的filtered[][2]中,
 			//对角线半像素内差点存储在x264_frame_t的filtered[][3]中
-			//（整像素点存储在x264_frame_t的filtered[][0]中）。
-	    //（3）视频质量SSIM和PSNR计算。PSNR在这里只计算了SSD，通过调用x264_pixel_ssd_wxh()实现；SSIM的计算则是通过x264_pixel_ssim_wxh()实现。
+			//（整像素点存储在x264_frame_t的filtered[][0]中）.
+	    //（3）视频质量SSIM和PSNR计算.PSNR在这里只计算了SSD,通过调用x264_pixel_ssd_wxh()实现；SSIM的计算则是通过x264_pixel_ssim_wxh()实现.
 
-        // 宏块序号,也是宏块偏移,这里是相对于slice来说的。由i_mb_x和i_mb_y计算而来
+        // 宏块序号,也是宏块偏移,这里是相对于slice来说的.由i_mb_x和i_mb_y计算而来
         mb_xy = i_mb_x + i_mb_y * h->mb.i_mb_width;
         int mb_spos = bs_pos(&h->out.bs) + x264_cabac_pos(&h->cabac);
 
         // 实际上这里的滤波与半像素插值操作都是针对一行宏块编码并且重建好了之后下一列正要开始的时候进行的
-        // 这里if( i_mb_x == 0 )就说明了这一点，对上一行的所有宏块做deblock去除块效应，之后在做半像素插值
+        // 这里if( i_mb_x == 0 )就说明了这一点,对上一行的所有宏块做deblock去除块效应,之后在做半像素插值
         // 这里半像素插值预先做好是为了之后重建帧作为参考帧使用时不需要在计算1/2像素的情况,然而1/4像素还是需要现场计算的
         if( i_mb_x == 0 )
         {
@@ -2947,15 +2947,15 @@ static intptr_t slice_write( x264_t *h )
         }
 
 
-	// b) 调用x264_macroblock_cache_load()将要编码的宏块的周围的宏块的信息读进来。
-	    //（1）加载Intra4x4帧内预测模式intra4x4_pred_mode[]和DCT非零系数non_zero_count[]缓存Cache的宏块周边信息。加载顺序为：上->左->左上。
-	    //（2）加载宏块重建像素p_fdec[]的周边像素，以及宏块编码像素p_fenc[]。对于p_fdec[]来说，在本函数中直接加载当前宏块左边的像素；
-            // 调用函数x264_macroblock_load_pic_pointers()加载当前宏块上面的像素。对于p_fenc[]来说，调用x264_macroblock_load_pic_pointers()从图像上拷贝数据。
-				//x264_macroblock_load_pic_pointers()用于给宏块重建像素p_fdec[]和宏块编码像素p_fenc[]加载数据，并且加载图像的半像素数据。
-				//（1）加载编码宏块mb.pic.p_fenc[]的像素数据，以及重建宏块mb.pic.p_fenc[]上边的像素数据。
-				//（2）加载参考帧的半像素数据（除了整像素外，还包含了：H，V，C三组半像素数据点）。
-	    //（3）加载参考帧序号ref[]和运动矢量mv[]缓存Cache的宏块周边信息。加载顺序为：左上->上->左。
-	    //（4）加载其它信息。
+	// b) 调用x264_macroblock_cache_load()将要编码的宏块的周围的宏块的信息读进来.
+	    //（1）加载Intra4x4帧内预测模式intra4x4_pred_mode[]和DCT非零系数non_zero_count[]缓存Cache的宏块周边信息.加载顺序为：上->左->左上.
+	    //（2）加载宏块重建像素p_fdec[]的周边像素,以及宏块编码像素p_fenc[].对于p_fdec[]来说,在本函数中直接加载当前宏块左边的像素；
+            // 调用函数x264_macroblock_load_pic_pointers()加载当前宏块上面的像素.对于p_fenc[]来说,调用x264_macroblock_load_pic_pointers()从图像上拷贝数据.
+				//x264_macroblock_load_pic_pointers()用于给宏块重建像素p_fdec[]和宏块编码像素p_fenc[]加载数据,并且加载图像的半像素数据.
+				//（1）加载编码宏块mb.pic.p_fenc[]的像素数据,以及重建宏块mb.pic.p_fenc[]上边的像素数据.
+				//（2）加载参考帧的半像素数据（除了整像素外,还包含了：H,V,C三组半像素数据点）.
+	    //（3）加载参考帧序号ref[]和运动矢量mv[]缓存Cache的宏块周边信息.加载顺序为：左上->上->左.
+	    //（4）加载其它信息.
         /* load cache */
         // 这里是否有mbaff宏块级帧场自适应事区别对待的, 具体看看x264.h中关于这个名词的相关注释
         if( SLICE_MBAFF )
@@ -2963,30 +2963,30 @@ static intptr_t slice_write( x264_t *h )
         else
             x264_macroblock_cache_load_progressive( h, i_mb_x, i_mb_y ); // 加载Cache-隔行扫描
 
-	// c) 调用x264_macroblock_analyse()用于分析宏块的编码模式。
-		//对于帧内宏块来说，主要分析使用Intra16x16合适还是使用Intra4x4合适；
-		//对于帧间宏块来说，主要分析它的划分模式，并且进行运动估计。
-		//（1）如果I Slice，调用x264_mb_analyse_intra()帧内预测分析-从16x16的SAD(4种预测方向),4个8x8的SAD(方向同4x4 仅限high profile及更高profile)和，16个4x4SA(9种)中选出最优方式:宏块大小+预测模式
-		//（2）如果当前是P Slice，则进行下面流程的分析：
-			//1、调用x264_macroblock_probe_pskip()分析是否为Skip宏块，如果是的话则不再进行下面分析。
-			//2、调用各种函数x264_mb_analyse_inter_？计算多种模式中哪一种代价最低（P16x16 P16x8 P8x16 P8x8 P4x8 P8x4 P4x4 Intra宏块）（P Slice中也允许有Intra宏块）。
-		//（3）如果当前是B Slice，则进行和P Slice类似的处理。宏块的帧间预测方法：初始化 + x264_me_search_ref运动估计（先整像素 再亚像素精度） + 统计
-		    // X264中，半像素数据是在滤波（Filter）部分的x264_fdec_filter_row()中提前计算出来的，而1/4像素数据则是临时通过半像素数据线性内插得到的。
+	// c) 调用x264_macroblock_analyse()用于分析宏块的编码模式.
+		//对于帧内宏块来说,主要分析使用Intra16x16合适还是使用Intra4x4合适；
+		//对于帧间宏块来说,主要分析它的划分模式,并且进行运动估计.
+		//（1）如果I Slice,调用x264_mb_analyse_intra()帧内预测分析-从16x16的SAD(4种预测方向),4个8x8的SAD(方向同4x4 仅限high profile及更高profile)和,16个4x4SA(9种)中选出最优方式:宏块大小+预测模式
+		//（2）如果当前是P Slice,则进行下面流程的分析：
+			//1、调用x264_macroblock_probe_pskip()分析是否为Skip宏块,如果是的话则不再进行下面分析.
+			//2、调用各种函数x264_mb_analyse_inter_？计算多种模式中哪一种代价最低（P16x16 P16x8 P8x16 P8x8 P4x8 P8x4 P4x4 Intra宏块）（P Slice中也允许有Intra宏块）.
+		//（3）如果当前是B Slice,则进行和P Slice类似的处理.宏块的帧间预测方法：初始化 + x264_me_search_ref运动估计（先整像素 再亚像素精度） + 统计
+		    // X264中,半像素数据是在滤波（Filter）部分的x264_fdec_filter_row()中提前计算出来的,而1/4像素数据则是临时通过半像素数据线性内插得到的.
             // 运动搜索估计方式：
             // 1、快读搜索（菱形搜索算法（DIA） 六边形搜索算法（HEX）  非对称十字型多层次六边形格点搜索算法（UMH））
-            // 2、全局搜索（太慢故极少使用）搜索的工作量越大。速度越慢 质量越高 （就是在找局部代价极小值点）
+            // 2、全局搜索（太慢故极少使用）搜索的工作量越大.速度越慢 质量越高 （就是在找局部代价极小值点）
 
         x264_macroblock_analyse( h );
 
         /* encode this macroblock -> be careful it can change the mb type to P_SKIP if needed */
 reencode:
-	// d) 调用x264_macroblock_encode()执行宏块编码模块。
-	   // 两个工作：编码（DCT变换和量化）和重建（DCT反变换和反量化）。
+	// d) 调用x264_macroblock_encode()执行宏块编码模块.
+	   // 两个工作：编码（DCT变换和量化）和重建（DCT反变换和反量化）.
         x264_macroblock_encode( h );
 
 
-	// e) 调用x264_macroblock_write_cabac()/x264_macroblock_write_cavlc()执行熵编码模块。
-	//（1）根据Slice类型的不同，调用不同的函数输出宏块头（MB Header）：对于P/B/I Slice，调用x264_cavlc_mb_header_p/b/i()
+	// e) 调用x264_macroblock_write_cabac()/x264_macroblock_write_cavlc()执行熵编码模块.
+	//（1）根据Slice类型的不同,调用不同的函数输出宏块头（MB Header）：对于P/B/I Slice,调用x264_cavlc_mb_header_p/b/i()
 	//（2）调用x264_cavlc_qp_delta()输出宏块QP值
 	//（3）调用x264_cavlc_block_residual()输出CAVLC编码的残差数据
         if( h->param.b_cabac )
@@ -3094,12 +3094,12 @@ cont:
         h->mb.b_reencode_mb = 0;
 
 
-	// f) 调用x264_macroblock_cache_save()保存当前宏块的信息。以供后面宏块编码作为参考。
-	   // 它的作用与x264_macroblock_cache_load()是相对应的。
+	// f) 调用x264_macroblock_cache_save()保存当前宏块的信息.以供后面宏块编码作为参考.
+	   // 它的作用与x264_macroblock_cache_load()是相对应的.
         /* save cache */
         x264_macroblock_cache_save( h );
 
-    // g) 调用x264_ratecontrol_mb()执行码率控制。
+    // g) 调用x264_ratecontrol_mb()执行码率控制.
         if( x264_ratecontrol_mb( h, mb_size ) < 0 )
         {
             bitstream_restore( h, &bs_bak[BS_BAK_ROW_VBV], &i_skip, 1 );
@@ -3220,7 +3220,7 @@ cont:
         bs_flush( &h->out.bs );
     }
 
-// （5）调用x264_nal_end()结束输出一个NALU。
+// （5）调用x264_nal_end()结束输出一个NALU.
     if( nal_end( h ) )
         return -1;
 
@@ -3496,7 +3496,7 @@ int     x264_encoder_encode( x264_t *h,
         }
 
         /* 1: Copy the picture to a frame and move it to a buffer */
-        x264_frame_t *fenc = x264_frame_pop_unused( h, 0 ); //获取1个x264_frame_t类型结构体fenc。如果frames.unused[]队列不为空，就调用x264_frame_pop()从unused[]队列取1个现成的；否则就调用x264_frame_new()创建一个新的。
+        x264_frame_t *fenc = x264_frame_pop_unused( h, 0 ); //获取1个x264_frame_t类型结构体fenc.如果frames.unused[]队列不为空,就调用x264_frame_pop()从unused[]队列取1个现成的；否则就调用x264_frame_new()创建一个新的.
         if( !fenc )
             return -1;
 
@@ -3652,7 +3652,7 @@ int     x264_encoder_encode( x264_t *h,
         i_nal_type    = NAL_SLICE_IDR;
         i_nal_ref_idc = NAL_PRIORITY_HIGHEST;
         h->sh.i_type = SLICE_TYPE_I;
-        reference_reset( h ); //如果为IDR帧，调用该函数清空参考帧列表。
+        reference_reset( h ); //如果为IDR帧,调用该函数清空参考帧列表.
         h->frames.i_poc_last_open_gop = -1;
     }
     else if( h->fenc->i_type == X264_TYPE_I )
@@ -3660,7 +3660,7 @@ int     x264_encoder_encode( x264_t *h,
         i_nal_type    = NAL_SLICE;
         i_nal_ref_idc = NAL_PRIORITY_HIGH; /* Not completely true but for now it is (as all I/P are kept as ref)*/
         h->sh.i_type = SLICE_TYPE_I;
-        reference_hierarchy_reset( h ); //如果是I（非IDR帧）、P帧、B帧（可做为参考帧），调用该函数。
+        reference_hierarchy_reset( h ); //如果是I（非IDR帧）、P帧、B帧（可做为参考帧）,调用该函数.
         if( h->param.b_open_gop )
             h->frames.i_poc_last_open_gop = h->fenc->b_keyframe ? h->fenc->i_poc : -1;
     }

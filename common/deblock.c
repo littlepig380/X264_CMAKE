@@ -183,9 +183,9 @@ static void deblock_h_chroma_422_c( pixel *pix, intptr_t stride, int alpha, int 
 static ALWAYS_INLINE void deblock_edge_luma_intra_c( pixel *pix, intptr_t xstride, int alpha, int beta )
 {
 
-	//如果xstride=stride，ystride=1
+	//如果xstride=stride,ystride=1
 	//就是处理纵向的6个像素
-	//对应的是方块的横向边界的滤波。如下所示：
+	//对应的是方块的横向边界的滤波.如下所示：
 	//        p2
 	//        p1
 	//        p0
@@ -194,9 +194,9 @@ static ALWAYS_INLINE void deblock_edge_luma_intra_c( pixel *pix, intptr_t xstrid
 	//        q1
 	//        q2
 	//
-	//如果xstride=1，ystride=stride
+	//如果xstride=1,ystride=stride
 	//就是处理纵向的6个像素
-	//对应的是方块的横向边界的滤波，即如下所示：
+	//对应的是方块的横向边界的滤波,即如下所示：
 	//          ||
 	// p2 p1 p0 || q0 q1 q2
 	//          ||
@@ -211,7 +211,7 @@ static ALWAYS_INLINE void deblock_edge_luma_intra_c( pixel *pix, intptr_t xstrid
     int q1 = pix[ 1*xstride];
     int q2 = pix[ 2*xstride];
 
-    //满足条件的时候，才滤波
+    //满足条件的时候,才滤波
     if( abs( p0 - q0 ) < alpha && abs( p1 - p0 ) < beta && abs( q1 - q0 ) < beta )
     {
         if( abs( p0 - q0 ) < ((alpha >> 2) + 2) )
@@ -266,13 +266,13 @@ static void deblock_v_luma_intra_c( pixel *pix, intptr_t stride, int alpha, int 
 	//注意
 	//xstride=stride
 	//ystride=1
-	//处理完1个像素点之后，pix增加ystride
+	//处理完1个像素点之后,pix增加ystride
  
 	//水平滤波和垂直滤波通用的强滤波函数
     deblock_luma_intra_c( pix, stride, 1, alpha, beta );
 }
 
-//去块效应滤波-强滤波器，Bs为4
+//去块效应滤波-强滤波器,Bs为4
 //水平（Horizontal）滤波器
 //      边界
 //       |
@@ -459,7 +459,7 @@ void x264_frame_deblock_row( x264_t *h, int mb_y )
         int stride2y  = stridey << MB_INTERLACED;
         int stride2uv = strideuv << MB_INTERLACED;
     
-        //QP，用于计算环路滤波的门限值alpha和beta
+        //QP,用于计算环路滤波的门限值alpha和beta
         int qp = h->mb.qp[mb_xy];
         int qpc = h->chroma_qp_table[qp];
         int first_edge_only = (h->mb.partition[mb_xy] == D_16x16 && !h->mb.cbp[mb_xy] && !intra_cur) || qp <= qp_thresh;
@@ -484,17 +484,17 @@ void x264_frame_deblock_row( x264_t *h, int mb_y )
 		 */
 
 	    /* 
-         * 一个比较长的宏，用于进行环路滤波
+         * 一个比较长的宏,用于进行环路滤波
          * 根据不同的情况传递不同的参数
          * 几个参数的含义
          * intra：为“_intra”的时候,其中的“deblock_edge##intra()”展开为函数deblock_edge_intra()
          * 其中的“h->loopf.deblock_luma##intra[dir]”展开为强滤波汇编函数h->loopf.deblock_luma_intra[dir]()
-         * 为“”（空,缺省），其中的“deblock_edge##intra()”展开为函数deblock_edge()
+         * 为“”（空,缺省）,其中的“deblock_edge##intra()”展开为函数deblock_edge()
          * 其中的“h->loopf.deblock_luma##intra[dir]”展开为普通滤波汇编函数h->loopf.deblock_luma[dir]()
          * 
-		 * “intra”指定了是普通滤波（Bs=1，2，3）还是强滤波（Bs=4）;
-		 * “dir”指定了滤波器的方向。0为水平滤波器（垂直边界），1为垂直滤波器（水平边界）;
-		 * “edge”指定了边界的位置。“0”，“1”，“2”，“3”分别代表了水平（或者垂直）的4条边界;
+		 * “intra”指定了是普通滤波（Bs=1,2,3）还是强滤波（Bs=4）;
+		 * “dir”指定了滤波器的方向.0为水平滤波器（垂直边界）,1为垂直滤波器（水平边界）;
+		 * “edge”指定了边界的位置.“0”,“1”,“2”,“3”分别代表了水平（或者垂直）的4条边界;
 		 */
         #define FILTER( intra, dir, edge, qp, chroma_qp )\
         do\
@@ -606,9 +606,9 @@ void x264_frame_deblock_row( x264_t *h, int mb_y )
                 /* Any MB that was coded, or that analysis decided to skip, has quality commensurate with its QP.
                  * But if deblocking affects neighboring MBs that were force-skipped, blur might accumulate there.
                  * So reset their effective QP to max, to indicate that lack of guarantee. */
-                /* 翻译: 任何编码过的或决策为skip的MB，都具有与其 QP 相称的质量。
-                 * 但如果deblocking操作影响到被强制跳过的相邻MB，模糊可能会在那里累积。
-                 * 因此将他们的有效QP重置为max，以表明缺乏保证。 
+                /* 翻译: 任何编码过的或决策为skip的MB,都具有与其 QP 相称的质量.
+                 * 但如果deblocking操作影响到被强制跳过的相邻MB,模糊可能会在那里累积.
+                 * 因此将他们的有效QP重置为max,以表明缺乏保证. 
                 */
                 // 这个地方的注释大概意思是对于skip的块做deblocking操作会导致客户端与服务端在跳过的这个块上面数据不一致,导致模糊积累传播
                 // 具体还要整体研究QP的整个机制,后续再研究
@@ -623,9 +623,9 @@ void x264_frame_deblock_row( x264_t *h, int mb_y )
                 此时的环路滤波deblock是一次性针对16个点也就是16*16宏块的最左侧一列进行的
                 弱环路滤波也是一次性进行16个点的滤波,但是以4个为一组,总共4组,其中还可能根据情况的不同跳过一些组*/
                 if( intra_deblock )
-                    FILTER( _intra, 0, 0, qp_left, qpc_left );//【0】强滤波，水平滤波器（垂直边界）
+                    FILTER( _intra, 0, 0, qp_left, qpc_left );//【0】强滤波,水平滤波器（垂直边界）
                 else
-                    FILTER(       , 0, 0, qp_left, qpc_left );//【0】普通滤波，水平滤波器（垂直边界）
+                    FILTER(       , 0, 0, qp_left, qpc_left );//【0】普通滤波,水平滤波器（垂直边界）
             }
         }
         /*
@@ -634,7 +634,7 @@ void x264_frame_deblock_row( x264_t *h, int mb_y )
          */
         if( !first_edge_only )
         {
-            //普通滤波，水平滤波器（垂直边界）
+            //普通滤波,水平滤波器（垂直边界）
             FILTER( , 0, 1, qp, qpc );//【1】
             FILTER( , 0, 2, qp, qpc );//【2】
             FILTER( , 0, 3, qp, qpc );//【3】

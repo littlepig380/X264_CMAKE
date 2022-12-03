@@ -80,9 +80,9 @@ typedef struct x264_frame
     pixel *plane[3];
     pixel *plane_fld[3];
     // filtered 图像半像素点存储缓存filtered[], 
-    // 其中前面的“[3]”代表Y，U，V三个分量，
+    // 其中前面的“[3]”代表Y,U,V三个分量,
     // 后面的“[4]”分别存储了整像素, 
-    // H(横向)半像素, V(纵向)半像素, C（对角线）半像素的数据。
+    // H(横向)半像素, V(纵向)半像素, C（对角线）半像素的数据.
     pixel *filtered[3][4]; /* plane[0], H, V, HV */
     pixel *filtered_fld[3][4];
     pixel *lowres[4]; /* half-size copy of input frame: Orig, H, V, HV */

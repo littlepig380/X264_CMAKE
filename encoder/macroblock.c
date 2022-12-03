@@ -1033,7 +1033,7 @@ static ALWAYS_INLINE int macroblock_probe_skip_internal( x264_t *h, int b_bidir,
             {
                 h->zigzagf.scan_4x4( dctscan, dct4x4[idx] );
                 i_decimate_mb += h->quantf.decimate_score16( dctscan );
-                if( i_decimate_mb >= 6 ) //如果大于6，则返回非pskip, 表示不适合直接预测
+                if( i_decimate_mb >= 6 ) //如果大于6,则返回非pskip, 表示不适合直接预测
                     return 0;
             }
         }
@@ -1130,7 +1130,7 @@ static ALWAYS_INLINE int macroblock_probe_skip_internal( x264_t *h, int b_bidir,
                 {
                     h->zigzagf.scan_4x4( dctscan, dct4x4[idx] );
                     i_decimate_mb += h->quantf.decimate_score15( dctscan );
-                    if( i_decimate_mb >= 7 ) //如果计算的值大于7，返回非pskip类型标识
+                    if( i_decimate_mb >= 7 ) //如果计算的值大于7,返回非pskip类型标识
                         return 0;
                 }
             }

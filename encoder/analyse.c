@@ -571,7 +571,7 @@ static inline void psy_trellis_init( x264_t *h, int do_both_dct )
 /* Reset fenc satd scores cache for psy RD */
 // psy-rd:Psychovisual optimization strength for RDO:在rdo中使用psy算法(一种心理视觉模型)
 // 这是两个参数:f_psy_rd (psy rdo 强度 0-10 i_subpel_refine >= 6 才有效 )和 f_psy_trellis (/* Psy trellis strength*/)
-// Psy Trellis量化，可以提高细节，但是会大幅度提高码率。
+// Psy Trellis量化,可以提高细节,但是会大幅度提高码率.
 static inline void mb_init_fenc_cache( x264_t *h, int b_satd )
 {
     if( h->param.analyse.i_trellis == 2 && h->mb.i_psy_trellis )
@@ -670,18 +670,18 @@ static void mb_analyse_intra_chroma( x264_t *h, x264_mb_analysis_t *a )
 }
 
 /* FIXME: should we do any sort of merged chroma analysis with 4:4:4? */
-// 功能：帧内预测:从16x16的SAD,4个8x8的SAD和，16个4x4SAD中选出最优方式
+// 功能：帧内预测:从16x16的SAD,4个8x8的SAD和,16个4x4SAD中选出最优方式
 // 参考解析链接: https://blog.csdn.net/weixin_34018202/article/details/90657027?spm=1001.2101.3001.6650.1&utm_medium=distribute.pc_relevant.none-task-blog-2%7Edefault%7ECTRLIST%7ERate-1-90657027-blog-110261330.pc_relevant_3mothn_strategy_and_data_recovery&depth_1-utm_source=distribute.pc_relevant.none-task-blog-2%7Edefault%7ECTRLIST%7ERate-1-90657027-blog-110261330.pc_relevant_3mothn_strategy_and_data_recovery&utm_relevant_index=2
-// H.264采用拉格朗日率失真优化（Rate Distortion Optimization, RDO）策略进行最优化编码模式选择，通过遍历所有可能的编码模式，最后选择最小率失真代价模式作为最佳帧内预测模式。具体的编码模式选择过程概述如下：
-// （1）、计算当前4*4块和重建的4*4块之间的差值平方和（SSD，Sum of Squared Difference）以及编码的比特率；
+// H.264采用拉格朗日率失真优化（Rate Distortion Optimization, RDO）策略进行最优化编码模式选择,通过遍历所有可能的编码模式,最后选择最小率失真代价模式作为最佳帧内预测模式.具体的编码模式选择过程概述如下：
+// （1）、计算当前4*4块和重建的4*4块之间的差值平方和（SSD,Sum of Squared Difference）以及编码的比特率；
 // （2）、计算9种帧内模式的率失真值；
 // （3）、选择具有最小率失真值的模式作为最佳4*4帧内预测模式；
-// （4）、对宏块内的16个4*4块重复上述（1）~（3），获得每一个4*4块的最佳预测模式和相应的最小率失真值；
-// （5）、累加计算得出16个块的最小率失真值，得到当前宏块的4*4帧内预测率失真值；
-// （6）、按照类似的方法，分别计算当前16*16大小宏块在4种模式下的宏块率失真值，选取宏块率失真最小的模式作为最佳帧内16*16预测模式；
-// （7）、根据（5）和（6）中的最小率失真值，选取亮度宏块采用4*4或16*16帧内预测模式；
-// （8）、8*8色度宏块的帧内预测模式与亮度类似。
-// 在基本档次下，以色度模式为外循环，依次扫描亮度模式，搜索的总数是4*（9*16+4）=592次，获得的最优的帧内预测模式的计算量非常大。
+// （4）、对宏块内的16个4*4块重复上述（1）~（3）,获得每一个4*4块的最佳预测模式和相应的最小率失真值；
+// （5）、累加计算得出16个块的最小率失真值,得到当前宏块的4*4帧内预测率失真值；
+// （6）、按照类似的方法,分别计算当前16*16大小宏块在4种模式下的宏块率失真值,选取宏块率失真最小的模式作为最佳帧内16*16预测模式；
+// （7）、根据（5）和（6）中的最小率失真值,选取亮度宏块采用4*4或16*16帧内预测模式；
+// （8）、8*8色度宏块的帧内预测模式与亮度类似.
+// 在基本档次下,以色度模式为外循环,依次扫描亮度模式,搜索的总数是4*（9*16+4）=592次,获得的最优的帧内预测模式的计算量非常大.
 static void mb_analyse_intra( x264_t *h, x264_mb_analysis_t *a, int i_satd_inter )
 {
     const unsigned int flags = h->sh.i_type == SLICE_TYPE_I ? h->param.analyse.intra : h->param.analyse.inter;
@@ -791,7 +791,7 @@ static void mb_analyse_intra( x264_t *h, x264_mb_analysis_t *a, int i_satd_inter
                 i_satd = h->pixf.mbcmp[PIXEL_16x16]( p_src, FENC_STRIDE, p_dst, FDEC_STRIDE ) +
                          lambda * bs_size_ue( x264_mb_pred_mode16x16_fix[i_mode] ); // 选择satd残差最小的作为最佳匹配结果
                 COPY2_IF_LT( a->i_satd_i16x16, i_satd, a->i_predict16x16, i_mode );
-                //COPY2_IF_LT()函数的意思是“copy if little”。即如果值更小（代价更小），就拷贝。
+                //COPY2_IF_LT()函数的意思是“copy if little”.即如果值更小（代价更小）,就拷贝.
                 //宏定义展开后如下所示
                 //if((i_satd)<(a->i_satd_i16x16))
                 //{
@@ -861,31 +861,31 @@ static void mb_analyse_intra( x264_t *h, x264_mb_analysis_t *a, int i_satd_inter
              * DY/DU/DV are for luma/chroma DC.
              */
 
-            // 对于8x8的宏块， idx = 0, 1, 2, 3
+            // 对于8x8的宏块, idx = 0, 1, 2, 3
             // 对于idx = 1, 传入参数为idx = idx * 4 = 4,（如上）
             // x264_scan8[4] = 6 + 1 * 8,
             // 上述的Y便表示为一个4x4块
-            // idx = 1表示第二个8x8块，其刚好对应
-            // 着第三个4x4块， 即scan8 layout中的
+            // idx = 1表示第二个8x8块,其刚好对应
+            // 着第三个4x4块, 即scan8 layout中的
             // 第一行第六列
 
             // 对于idx = 2, 传入参数为idx = idx * 4 = 8,
             // x264_scan8[8] = 4 + 3 * 8,
             // 上述的Y便表示为一个4x4块
-            // idx = 2表示第三个8x8块，其刚好对应
-            // 着第9个4x4块， 即scan8 layout中的
+            // idx = 2表示第三个8x8块,其刚好对应
+            // 着第9个4x4块, 即scan8 layout中的
             // 第三行第四列
 
             // 对于idx = 3, 传入参数为idx = idx * 4 = 12,
             // x264_scan8[12] = 6 + 3 * 8,
             // 上述的Y便表示为一个4x4块
-            // idx = 3表示第四个8x8块，其刚好对应
-            // 着第11个4x4块， 即scan8 layout中的
+            // idx = 3表示第四个8x8块,其刚好对应
+            // 着第11个4x4块, 即scan8 layout中的
             // 第三行第六列
 
             // 所以x264_scan8[idx] - 1表示其左边的宏块
-            // x264_scan8[idx] - 8便是其顶部的宏块，
-            // 两者都是以4x4宏块为计量单位的。
+            // x264_scan8[idx] - 8便是其顶部的宏块,
+            // 两者都是以4x4宏块为计量单位的.
 
             // 再从8*8的角度取周边宏块的帧内预测信息做当前8*8的预测
             const int8_t *predict_mode = predict_8x8_mode_available( a->b_avoid_topright, h->mb.i_neighbour8[idx], idx );
@@ -894,7 +894,7 @@ static void mb_analyse_intra( x264_t *h, x264_mb_analysis_t *a, int i_satd_inter
             if( h->pixf.intra_mbcmp_x9_8x8 && predict_mode[8] >= 0 )
             {
                 /* No shortcuts here. The SSSE3 implementation of intra_mbcmp_x9 is fast enough. */
-                // 这里没有捷径。intra_mbcmp_x9的SSSE3实现已经足够快了。
+                // 这里没有捷径.intra_mbcmp_x9的SSSE3实现已经足够快了.
                 i_best = h->pixf.intra_mbcmp_x9_8x8( p_src_by, p_dst_by, edge, cost_i4x4_mode-i_pred_mode, a->i_satd_i8x8_dir[idx] );
                 i_cost += i_best & 0xffff;
                 i_best >>= 16;
@@ -1406,7 +1406,7 @@ static void mb_analyse_inter_p16x16( x264_t *h, x264_mb_analysis_t *a )
 
         /* search with ref */
 		//加载半像素点的列表
-        //参考列表的4个分量列表，包括yN(整点像素),yH(1/2水平内插),yV(1/2垂直内插), yHV(1/2斜对角内插)
+        //参考列表的4个分量列表,包括yN(整点像素),yH(1/2水平内插),yV(1/2垂直内插), yHV(1/2斜对角内插)
         LOAD_HPELS( &m, h->mb.pic.p_fref[0][i_ref], 0, i_ref, 0, 0 );
         LOAD_WPELS( &m, h->mb.pic.p_fref_w[i_ref], 0, i_ref, 0, 0 );
 
@@ -1478,8 +1478,8 @@ static void mb_analyse_inter_p16x16( x264_t *h, x264_mb_analysis_t *a )
 
     // i_mbrd参数的相关说明参见:https://zhuanlan.zhihu.com/p/473593903
     // 来自mb_analyse_init中a->i_mbrd = (subme>=6) + (subme>=8) + (h->param.analyse.i_subpel_refine>=10);
-    // 当mbrd值大于0时，意味此宏块的模式决策就需要用到RDO计算过程。而每个模式的RD cost值计算是在rd_cost_mb函数中完成
-    // [question]总的来说这个参数与subme紧密相关,让开发用户可以灵活选择视频编码复杂度，压缩性能以及图像质量之间的互相权衡,具体细节待研究
+    // 当mbrd值大于0时,意味此宏块的模式决策就需要用到RDO计算过程.而每个模式的RD cost值计算是在rd_cost_mb函数中完成
+    // [question]总的来说这个参数与subme紧密相关,让开发用户可以灵活选择视频编码复杂度,压缩性能以及图像质量之间的互相权衡,具体细节待研究
     if( a->i_mbrd )
     {
         mb_init_fenc_cache( h, a->i_mbrd >= 2 || h->param.analyse.inter & X264_ANALYSE_PSUB8x8 );
@@ -3083,18 +3083,18 @@ static inline void mb_analyse_qp_rd( x264_t *h, x264_mb_analysis_t *a )
 // https://blog.csdn.net/qq_41051855/article/details/79100635
 // https://developer.aliyun.com/article/31067
 
-//  尽管x264_macroblock_analyse()的源代码比较长，但是它的逻辑比较清晰，如下所示：
-// （1）、如果当前是I Slice，调用x264_mb_analyse_intra()进行Intra宏块的帧内预测模式分析。
-// （2）、如果当前是P Slice，则进行下面流程的分析：
-//     a)、调用x264_macroblock_probe_pskip()分析是否为Skip宏块，如果是的话则不再进行下面分析。
-//     b)、调用x264_mb_analyse_inter_p16x16()分析P16x16帧间预测的代价。
-//     c)、调用x264_mb_analyse_inter_p8x8()分析P8x8帧间预测的代价。
-//     d)、如果P8x8代价值小于P16x16，则依次对4个8x8的子宏块分割进行判断：
-//         i、调用x264_mb_analyse_inter_p4x4()分析P4x4帧间预测的代价。
-//         ii、如果P4x4代价值小于P8x8，则调用 x264_mb_analyse_inter_p8x4()和x264_mb_analyse_inter_p4x8()分析P8x4和P4x8帧间预测的代价。
-//     e)、如果P8x8代价值小于P16x16，调用x264_mb_analyse_inter_p16x8()和x264_mb_analyse_inter_p8x16()分析P16x8和P8x16帧间预测的代价。
-//     f)、此外还要调用x264_mb_analyse_intra()，检查当前宏块作为Intra宏块编码的代价是否小于作为P宏块编码的代价（P Slice中也允许有Intra宏块）。
-// （3）、如果当前是B Slice，则进行和P Slice类似的处理。
+//  尽管x264_macroblock_analyse()的源代码比较长,但是它的逻辑比较清晰,如下所示：
+// （1）、如果当前是I Slice,调用x264_mb_analyse_intra()进行Intra宏块的帧内预测模式分析.
+// （2）、如果当前是P Slice,则进行下面流程的分析：
+//     a)、调用x264_macroblock_probe_pskip()分析是否为Skip宏块,如果是的话则不再进行下面分析.
+//     b)、调用x264_mb_analyse_inter_p16x16()分析P16x16帧间预测的代价.
+//     c)、调用x264_mb_analyse_inter_p8x8()分析P8x8帧间预测的代价.
+//     d)、如果P8x8代价值小于P16x16,则依次对4个8x8的子宏块分割进行判断：
+//         i、调用x264_mb_analyse_inter_p4x4()分析P4x4帧间预测的代价.
+//         ii、如果P4x4代价值小于P8x8,则调用 x264_mb_analyse_inter_p8x4()和x264_mb_analyse_inter_p4x8()分析P8x4和P4x8帧间预测的代价.
+//     e)、如果P8x8代价值小于P16x16,调用x264_mb_analyse_inter_p16x8()和x264_mb_analyse_inter_p8x16()分析P16x8和P8x16帧间预测的代价.
+//     f)、此外还要调用x264_mb_analyse_intra(),检查当前宏块作为Intra宏块编码的代价是否小于作为P宏块编码的代价（P Slice中也允许有Intra宏块）.
+// （3）、如果当前是B Slice,则进行和P Slice类似的处理.
 
 void x264_macroblock_analyse( x264_t *h )
 {
@@ -3113,12 +3113,12 @@ void x264_macroblock_analyse( x264_t *h )
     //宏块相关初始化
     mb_analyse_init( h, &analysis, h->mb.i_qp );
 
-    //I帧：只使用帧内预测，分别计算亮度16x16（4种）和4x4（9种）所有模式的代价值，选出代价最小的模式
-    //P帧：计算帧内模式和帧间模式（ P Slice允许有Intra宏块和P宏块；同理B帧也支持Intra宏块）。
-    //对P帧的每一种分割进行帧间预测，得到最佳的运动矢量及最佳匹配块。
+    //I帧：只使用帧内预测,分别计算亮度16x16（4种）和4x4（9种）所有模式的代价值,选出代价最小的模式
+    //P帧：计算帧内模式和帧间模式（ P Slice允许有Intra宏块和P宏块；同理B帧也支持Intra宏块）.
+    //对P帧的每一种分割进行帧间预测,得到最佳的运动矢量及最佳匹配块.
     //帧间预测过程：选出最佳矢量——>找到最佳的整像素点——>找到最佳的二分之一像素点——>找到最佳的1/4像素点
     //然后取代价最小的为最佳MV和分割方式
-    //最后从帧内模式和帧间模式中选择代价比较小的方式（有可能没有找到很好的匹配块，这时候就直接使用帧内预测而不是帧间预测）。
+    //最后从帧内模式和帧间模式中选择代价比较小的方式（有可能没有找到很好的匹配块,这时候就直接使用帧内预测而不是帧间预测）.
 
     /*--------------------------- Do the analysis ---------------------------*/
     if( h->sh.i_type == SLICE_TYPE_I )
@@ -3130,8 +3130,8 @@ intra_analysis:
             mb_init_fenc_cache( h, analysis.i_mbrd >= 2 );
 
         //帧内预测分析
-        //从16×16的SAD,4个8×8的SAD和，16个4×4SAD中选出最优方式
-        mb_analyse_intra( h, &analysis, COST_MAX ); // Intra宏块帧内预测模式分析。
+        //从16×16的SAD,4个8×8的SAD和,16个4×4SAD中选出最优方式
+        mb_analyse_intra( h, &analysis, COST_MAX ); // Intra宏块帧内预测模式分析.
         if( analysis.i_mbrd )
             intra_rd( h, &analysis, COST_MAX );
         //分析结果都存储在analysis结构体中
@@ -3143,15 +3143,15 @@ intra_analysis:
         COPY2_IF_LT( i_cost, analysis.i_satd_i4x4, h->mb.i_type, I_4x4 );
         COPY2_IF_LT( i_cost, analysis.i_satd_i8x8, h->mb.i_type, I_8x8 );
 
-        // [question]画面极其特殊的时候，才有可能用到I_PCM, 待论证
-        // 除此之外，H.264还有一种帧内编码模式I_PCM，
-        // 该模式允许编码器直接传输图像的像素值，而不经过预测和变换。
-        // 在一些特殊情况下，特别是图像内容不规则或者量化参数非常低时，
-        // 该模式比起其他的“常规操作”（帧内预测——变换——量化——熵编码）效率更高。
+        // [question]画面极其特殊的时候,才有可能用到I_PCM, 待论证
+        // 除此之外,H.264还有一种帧内编码模式I_PCM,
+        // 该模式允许编码器直接传输图像的像素值,而不经过预测和变换.
+        // 在一些特殊情况下,特别是图像内容不规则或者量化参数非常低时,
+        // 该模式比起其他的“常规操作”（帧内预测——变换——量化——熵编码）效率更高.
         // I_PCM模式的采用主要有以下几个目的：
         // （1）、允许编码器精确地表示像素值；
-        // （2）、提供表示不规则图像内容的准确值，而不引起重大的数据量增加；
-        // （3）、严格限制宏块解码比特数，但不损害编码效率。
+        // （2）、提供表示不规则图像内容的准确值,而不引起重大的数据量增加；
+        // （3）、严格限制宏块解码比特数,但不损害编码效率.
         if( analysis.i_satd_pcm < i_cost )
             h->mb.i_type = I_PCM;
 
@@ -3220,10 +3220,10 @@ intra_analysis:
                          h->mb.i_mb_type_topleft == P_SKIP ||
                          h->mb.i_mb_type_topright == P_SKIP )
                     b_skip = x264_macroblock_probe_pskip( h ); 
-                    // a)、分析是否为Skip宏块，如果是的话则不再进行下面分析, skip的相关逻辑还需要具体看
-                    // 直接预测模式编码的B片宏块或宏块分割不传送MV。而是由解码器计算list0和 list1 中已编码MV，得出解码残差像素的双向预测运动补偿。
-                    // B片中的skipped宏块便由解码器用直接模式重建而得。P片中的skip很可能也是直接引用推测重建而成的.
-                    // 直接预测模式具体可分为空域和时域两种模式. 片头会指明将用时间还是空间方式计算直接模式或其分割的矢量。
+                    // a)、分析是否为Skip宏块,如果是的话则不再进行下面分析, skip的相关逻辑还需要具体看
+                    // 直接预测模式编码的B片宏块或宏块分割不传送MV.而是由解码器计算list0和 list1 中已编码MV,得出解码残差像素的双向预测运动补偿.
+                    // B片中的skipped宏块便由解码器用直接模式重建而得.P片中的skip很可能也是直接引用推测重建而成的.
+                    // 直接预测模式具体可分为空域和时域两种模式. 片头会指明将用时间还是空间方式计算直接模式或其分割的矢量.
             }
         }
 
@@ -3295,13 +3295,13 @@ skip_analysis:
             i_partition = D_16x16;
             i_cost = analysis.l0.me16x16.cost;
 
-            // d)、如果P8x8代价值小于P16x16，则依次对4个8x8的子宏块分割进行判断：
-            // i、调用x264_mb_analyse_inter_p4x4()分析P4x4帧间预测的代价。
-            // ii、如果P4x4代价值小于P8x8，则调用 x264_mb_analyse_inter_p8x4()和x264_mb_analyse_inter_p4x8()分析P8x4和P4x8帧间预测的代价。
+            // d)、如果P8x8代价值小于P16x16,则依次对4个8x8的子宏块分割进行判断：
+            // i、调用x264_mb_analyse_inter_p4x4()分析P4x4帧间预测的代价.
+            // ii、如果P4x4代价值小于P8x8,则调用 x264_mb_analyse_inter_p8x4()和x264_mb_analyse_inter_p4x8()分析P8x4和P4x8帧间预测的代价.
 
-            // 《H.264标准》中规定，宏块划分（帧间预测）,
-            // 每个16x16的宏块可以划分为16x16，16x8，8x16，8x8四种类型。
-            // 如果宏块划分为8x8类型的时候，每个8x8宏块又可以划分为8x8，8x4，4x8，4x4四种小块
+            // 《H.264标准》中规定,宏块划分（帧间预测）,
+            // 每个16x16的宏块可以划分为16x16,16x8,8x16,8x8四种类型.
+            // 如果宏块划分为8x8类型的时候,每个8x8宏块又可以划分为8x8,8x4,4x8,4x4四种小块
 
             if( ( flags & X264_ANALYSE_PSUB16x16 ) && (!analysis.b_early_terminate ||
                 analysis.l0.i_cost8x8 < analysis.l0.me16x16.cost) )
@@ -3338,7 +3338,7 @@ skip_analysis:
                 }
             }
 
-            // e)、如果P8x8代价值小于P16x8，调用x264_mb_analyse_inter_p16x8()和x264_mb_analyse_inter_p8x16()分析P16x8和P8x16帧间预测的代价。
+            // e)、如果P8x8代价值小于P16x8,调用x264_mb_analyse_inter_p16x8()和x264_mb_analyse_inter_p8x16()分析P16x8和P8x16帧间预测的代价.
             /* Now do 16x8/8x16 */
             int i_thresh16x8 = analysis.l0.me8x8[1].cost_mv + analysis.l0.me8x8[2].cost_mv;
             if( ( flags & X264_ANALYSE_PSUB16x16 ) && (!analysis.b_early_terminate ||
@@ -3361,13 +3361,13 @@ skip_analysis:
 
             h->mb.i_partition = i_partition;
 
-            // 帧间模式选择后，对该模式进行亚象素精细搜索。以进一步减少误差。
-            // 值得注意的是，在前面每个模式的检测时，也要进行亚象素搜索，见x264_me_search_ref（）函数的最后几行。
-            // 这里的亚象素搜索是在前面基础上再进行精细搜索的。
-            // 二者亚象素搜索（包括半象素和1/4象素）的次数由subpel_iterations[i][4]确定，而i由编译参数subme确定，
+            // 帧间模式选择后,对该模式进行亚象素精细搜索.以进一步减少误差.
+            // 值得注意的是,在前面每个模式的检测时,也要进行亚象素搜索,见x264_me_search_ref（）函数的最后几行.
+            // 这里的亚象素搜索是在前面基础上再进行精细搜索的.
+            // 二者亚象素搜索（包括半象素和1/4象素）的次数由subpel_iterations[i][4]确定,而i由编译参数subme确定,
             // 看运行帮助：
             // -m, --subme <integer>       Subpixel motion estimation quality: 1=fast, 5=best
-            // 实际上subme就是决定模式选择前后亚象素估计的点数。Subme越大，压缩效率越好，计算量越大。
+            // 实际上subme就是决定模式选择前后亚象素估计的点数.Subme越大,压缩效率越好,计算量越大.
             // 参考连接:https://codeantenna.com/a/uuNMumyNw9
             // [question]这里再次的亚像素搜索具体操作细节待研究
 
@@ -3435,7 +3435,7 @@ skip_analysis:
                 }
             }
 
-            // f)、此外还要调用x264_mb_analyse_intra()，检查当前宏块作为Intra宏块编码的代价是否小于作为P宏块编码的代价（P Slice中也允许有Intra宏块）。
+            // f)、此外还要调用x264_mb_analyse_intra(),检查当前宏块作为Intra宏块编码的代价是否小于作为P宏块编码的代价（P Slice中也允许有Intra宏块）.
             if( h->mb.b_chroma_me ) // 如果外部参数设置色彩UV也要进行运动估计的话
             {
                 if( CHROMA444 )
@@ -3453,7 +3453,7 @@ skip_analysis:
                 analysis.i_satd_i4x4   += analysis.i_satd_chroma;
             }
             else
-                mb_analyse_intra( h, &analysis, i_cost ); // P Slice中也允许有Intra宏块，所以也要进行分析
+                mb_analyse_intra( h, &analysis, i_cost ); // P Slice中也允许有Intra宏块,所以也要进行分析
 
             i_satd_inter = i_cost;
             i_satd_intra = X264_MIN3( analysis.i_satd_i16x16,

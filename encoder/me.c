@@ -193,7 +193,7 @@ void x264_me_search_ref( x264_t *h, x264_me_t *m, int16_t (*mvc)[2], int i_mvc, 
     pixel *p_fenc = m->p_fenc[0];// 指向待编码帧的Y平面(亮度)
     pixel *p_fref_w = m->p_fref_w;// 指向参考帧的的Y平面(亮度)
 
-    // 声明堆栈变量 pixel pix[16 * 16]， 并且32字节对齐
+    // 声明堆栈变量 pixel pix[16 * 16], 并且32字节对齐
     ALIGNED_ARRAY_32( pixel, pix,[16*16] );
 
     // 声明堆栈变量 int16_t mvc_temp[16][2], 并且8字节对齐
@@ -202,7 +202,7 @@ void x264_me_search_ref( x264_t *h, x264_me_t *m, int16_t (*mvc)[2], int i_mvc, 
     // 声明堆栈变量 int costs[16], 并且16字节对齐
     ALIGNED_ARRAY_16( int, costs,[16] );
 
-    // mv_limit_fpel 是一个 2x2 的 数组， 存放着整像素运动矢量搜索范围， min_x, min_y, max_x, max_y
+    // mv_limit_fpel 是一个 2x2 的 数组, 存放着整像素运动矢量搜索范围, min_x, min_y, max_x, max_y
     int mv_x_min = h->mb.mv_limit_fpel[0][0];
     int mv_y_min = h->mb.mv_limit_fpel[0][1];
     int mv_x_max = h->mb.mv_limit_fpel[1][0];
@@ -210,22 +210,22 @@ void x264_me_search_ref( x264_t *h, x264_me_t *m, int16_t (*mvc)[2], int i_mvc, 
 
 // 首先定义两个用来检查mv是否超出范围的宏
 /* Special version of pack to allow shortcuts in CHECK_MVRANGE */
-// pack16to32_mask2 主要是将两个整数分别放入高16位和低16位， 组合成一个32位的整数
+// pack16to32_mask2 主要是将两个整数分别放入高16位和低16位, 组合成一个32位的整数
 #define pack16to32_mask2(mx,my) (((uint32_t)(mx)<<16)|((uint32_t)(my)&0x7FFF))
     uint32_t mv_min = pack16to32_mask2( -mv_x_min, -mv_y_min );
     uint32_t mv_max = pack16to32_mask2( mv_x_max, mv_y_max )|0x8000;
     uint32_t pmv, bpred_mv = 0;
 
 // CHECK_MVRANGE这个宏主要是检测mv有没有超出边界范围,如果超出则不为0
-// 这个宏很巧妙， 它将检查mx, my 是否超过了搜索范围
-// 具体是， 如果mx, my有一个溢出， 其 or 运算的两边至少有一个的高位为1
+// 这个宏很巧妙, 它将检查mx, my 是否超过了搜索范围
+// 具体是, 如果mx, my有一个溢出, 其 or 运算的两边至少有一个的高位为1
 // 从而将导致其or的结果与0x80004000进行与运算得到的结果不为0
 #define CHECK_MVRANGE(mx,my) (!(((pack16to32_mask2(mx,my) + mv_min) | (mv_max - pack16to32_mask2(mx,my))) & 0x80004000))
 
     // a->p_cost_mv = h->cost_mv[a->i_qp] 见 x264_mb_analyse_load_costs
-    // h->cost_mv 初始化， 见 x264_analyse_init_costs
+    // h->cost_mv 初始化, 见 x264_analyse_init_costs
     // m->p_cost_mv = a->p_cost_mv 见宏定义 LOAD_FUNC
-    // [question]这个相减还真有点费解， 一个是地址， 一个是预测运动向量
+    // [question]这个相减还真有点费解, 一个是地址, 一个是预测运动向量
     const uint16_t *p_cost_mvx = m->p_cost_mv - m->mvp[0];
     const uint16_t *p_cost_mvy = m->p_cost_mv - m->mvp[1];
 
@@ -234,23 +234,23 @@ void x264_me_search_ref( x264_t *h, x264_me_t *m, int16_t (*mvc)[2], int i_mvc, 
 
     // 详细参数解析:https://zhuanlan.zhihu.com/p/473593903
     // i_subpel_refine是外部输入参数subme的代码化变量,是用来控制编码策略的
-    // 不过从x264源码里面的实现来看，它不仅可以设置子像素运动估计过程的计算复杂度，
-    // 还可以决定编码器整个参数选择过程的复杂度，是否使用RDO，从而影响x264视频编码器的压缩性能和编码速度。
-    // 目前subme可配置的取值范围[0,11]，默认值是7，对应medium preset。
-    // 按照官方的代码注释信息来看，subme的值具体会影响到x264编码器的运动估计和模式决策以及QP决策，
-    // 而这三个模块正好是视频编码器算法优化的关键所在，也是RDO率失真优化过程应用最多的模块。
+    // 不过从x264源码里面的实现来看,它不仅可以设置子像素运动估计过程的计算复杂度,
+    // 还可以决定编码器整个参数选择过程的复杂度,是否使用RDO,从而影响x264视频编码器的压缩性能和编码速度.
+    // 目前subme可配置的取值范围[0,11],默认值是7,对应medium preset.
+    // 按照官方的代码注释信息来看,subme的值具体会影响到x264编码器的运动估计和模式决策以及QP决策,
+    // 而这三个模块正好是视频编码器算法优化的关键所在,也是RDO率失真优化过程应用最多的模块.
     // (注:此处RDO指的是用原始和重建像素块SSD作为失真指标)
 
-    // i_subpel_refine动态预测和分区方式，可选项1~7，默认5(与压缩质量和时间关系密切，1是7速度的四倍以上)
-    // 1:用全像素块进行动态搜索，对每个块再用快速模式进行四分之一像素块精确搜索
-    // 2:用半像素块进行动态搜索，对每个块再用快速模式进行四分之一像素块精确搜索
-    // 3:用半像素块进行动态搜索，对每个块再用质量模式进行四分之一像素块精确搜索
+    // i_subpel_refine动态预测和分区方式,可选项1~7,默认5(与压缩质量和时间关系密切,1是7速度的四倍以上)
+    // 1:用全像素块进行动态搜索,对每个块再用快速模式进行四分之一像素块精确搜索
+    // 2:用半像素块进行动态搜索,对每个块再用快速模式进行四分之一像素块精确搜索
+    // 3:用半像素块进行动态搜索,对每个块再用质量模式进行四分之一像素块精确搜索
     // 4:用快速模式进行四分之一像素块精确搜索
     // 5:用质量模式进行四分之一像素块精确搜索
     // 6:进行I、P帧像素块的速率失真最优化(rdo)
     // 7:进行I、P帧运动矢量及块内部的速率失真最优化(质量最好)
-    // 8~9:会使用RDO进行最佳MV的搜索。
-    // 10:会对QP进行RDO搜索确定最佳值。
+    // 8~9:会使用RDO进行最佳MV的搜索.
+    // 10:会对QP进行RDO搜索确定最佳值.
 
     if( h->mb.i_subpel_refine >= 3 )
     {
@@ -264,12 +264,12 @@ void x264_me_search_ref( x264_t *h, x264_me_t *m, int16_t (*mvc)[2], int i_mvc, 
         // SPEL 是半像素 FPEL是全像素
         // SPEL 将整像素坐标转换为 1/4 像素坐标
         // 一个整数的低两位表示1/4像素坐标
-        // SPEL 将实参左移两位， 即将原来的坐标乘以 4，
+        // SPEL 将实参左移两位, 即将原来的坐标乘以 4,
         // 比如：0 1 两个相邻的像素变成了0, 4, 其中空出来的1, 2, 3
         // 就对应着 1/4  1/2  3/4 像素位
-        // 而 FPEL 将实参右移两位， 获得整像素位坐标
+        // 而 FPEL 将实参右移两位, 获得整像素位坐标
         // 即将原来放大了的整像素坐标还原
-        // 从下面的程序来看， mvp保存的是1/4像素坐标
+        // 从下面的程序来看, mvp保存的是1/4像素坐标
         int bpred_mx = x264_clip3( m->mvp[0], SPEL(mv_x_min), SPEL(mv_x_max) );
         int bpred_my = x264_clip3( m->mvp[1], SPEL(mv_y_min), SPEL(mv_y_max) );
         pmv = pack16to32_mask( bpred_mx, bpred_my );
@@ -289,8 +289,8 @@ void x264_me_search_ref( x264_t *h, x264_me_t *m, int16_t (*mvc)[2], int i_mvc, 
         // 第二优先级是计算mvc方向上cost,如果小就替代墙面pmv_cost
         if( i_mvc > 0 )
         {
-            // 下面的英文注释已经表达的很清楚了，这翻译一下
-            // 裁减候选的运动向量，除掉那些 0 向量 或 等于 pmv (mvp) 的向量 因为mvp已经计算过了
+            // 下面的英文注释已经表达的很清楚了,这翻译一下
+            // 裁减候选的运动向量,除掉那些 0 向量 或 等于 pmv (mvp) 的向量 因为mvp已经计算过了
             // 并将裁减结果放在mvc_temp[2]及之后处
             /* Clip MV candidates and eliminate those equal to zero and pmv. */
             int valid_mvcs = x264_predictor_clip( mvc_temp+2, mvc, i_mvc, h->mb.mv_limit_fpel, pmv );
@@ -302,7 +302,7 @@ void x264_me_search_ref( x264_t *h, x264_me_t *m, int16_t (*mvc)[2], int i_mvc, 
                  * MV candidates. [0] gets skipped in order to maintain alignment for
                  * x264_predictor_clip. */
 
-                // mvc_temp[0] 空着， 为了维护对齐
+                // mvc_temp[0] 空着, 为了维护对齐
                 // mvc_temp[1] 存放 pmv
 
                 M32( mvc_temp[1] ) = pmv;
@@ -326,11 +326,11 @@ void x264_me_search_ref( x264_t *h, x264_me_t *m, int16_t (*mvc)[2], int i_mvc, 
 
         /* Round the best predictor back to fullpel and get the cost, since this is where
          * we'll be starting the fullpel motion search. */
-        // 从1/4像素坐标得到整像素坐标，因为我们将开始整像素运动搜索
+        // 从1/4像素坐标得到整像素坐标,因为我们将开始整像素运动搜索
         bmx = FPEL( bpred_mx );
         bmy = FPEL( bpred_my );
         bpred_mv = pack16to32_mask(bpred_mx, bpred_my);
-        // 预测运动向量是 1/4 像素坐标，即是1/4像素预测(包括1/4, 2/4, 3/4)
+        // 预测运动向量是 1/4 像素坐标,即是1/4像素预测(包括1/4, 2/4, 3/4)
         if( bpred_mv&0x00030003 ) /* Only test if the tested predictor is actually subpel... */
             COST_MV( bmx, bmy );  // call x264_pixel_sad_16x16 计算预测运动向量代价
         else                          /* Otherwise just copy the cost (we already know it) */
@@ -342,7 +342,7 @@ void x264_me_search_ref( x264_t *h, x264_me_t *m, int16_t (*mvc)[2], int i_mvc, 
         {
             // 如果 bmx, bmy也不是0向量        
             // call x264_pixel_sad_16x16 以0向量为预测运动向量计算SAD,
-            // 如果代价更小，就替换代价和相应的预测运动向量
+            // 如果代价更小,就替换代价和相应的预测运动向量
             if( bmx|bmy ) COST_MV( 0, 0 );
         }
         /* If a subpel mv candidate was better than the zero vector, the previous
@@ -398,21 +398,21 @@ void x264_me_search_ref( x264_t *h, x264_me_t *m, int16_t (*mvc)[2], int i_mvc, 
 
         /* Same as above, except the condition is simpler. */
         // call x264_pixel_sad_16x16 以0向量为预测运动向量计算SAD,
-        // 如果代价更小，就替换代价和相应的预测运动向量
+        // 如果代价更小,就替换代价和相应的预测运动向量
         if( pmv )
             COST_MV( 0, 0 );
     }
 
     // 候选的mvp与mvc都计算完成之后, 进行邻域遍历式搜索
-    // 根据设定的运动估计方法， 来执行搜索
+    // 根据设定的运动估计方法, 来执行搜索
     switch( h->mb.i_me_method )
     {
         // （1）菱形搜索算法（DIA）
-        // 以搜索起点为中心，采用下图所示的小菱形模板（模板半径为1）搜索。
-        // 计算各点的匹配误差，得到MBD（最小误差）点。
-        // 如果MBD点在模板中心，则搜索结束，此时的MBD 点就是最优匹配点，
-        // 对应的像素块就是最佳匹配块；如果MBD点不在模板中心位置，
-        // 则以现在MBD点为中心点，继续进行小菱形搜索，直至MBD点落在中心点为止。
+        // 以搜索起点为中心,采用下图所示的小菱形模板（模板半径为1）搜索.
+        // 计算各点的匹配误差,得到MBD（最小误差）点.
+        // 如果MBD点在模板中心,则搜索结束,此时的MBD 点就是最优匹配点,
+        // 对应的像素块就是最佳匹配块；如果MBD点不在模板中心位置,
+        // 则以现在MBD点为中心点,继续进行小菱形搜索,直至MBD点落在中心点为止.
         case X264_ME_DIA: //菱形型搜索
         {
             /* diamond search, radius 1 */
@@ -435,14 +435,14 @@ void x264_me_search_ref( x264_t *h, x264_me_t *m, int16_t (*mvc)[2], int i_mvc, 
             break;
         }
         // （2）六边形搜索算法（HEX）
-        // 该方法采用1个大模板（六边形模板）和2个小模板（小菱形模板和小正方形模板）。
+        // 该方法采用1个大模板（六边形模板）和2个小模板（小菱形模板和小正方形模板）.
         // 具体的搜索步骤如下：
-        // 步骤1：以搜索起点为中心，采用图中左边的六边形模板进行搜索。
-        // 计算区域中心及周围6个点处的匹配误差并比较，如最小MBD 点位于模板中心点，
-        // 则转至步骤2；否则以上一次的MBD 点作为中心点，以六边形模板为模板进行反复搜索。
-        // 步骤2：以上一次的MBD 点为中心点，采用小菱形模板搜索，
-        // 计算各点的匹配误差，找到MBD 点。然后以MBD点为中心点，
-        // 采用小正方形模板搜索，得到的MBD点就是最优匹配点。
+        // 步骤1：以搜索起点为中心,采用图中左边的六边形模板进行搜索.
+        // 计算区域中心及周围6个点处的匹配误差并比较,如最小MBD 点位于模板中心点,
+        // 则转至步骤2；否则以上一次的MBD 点作为中心点,以六边形模板为模板进行反复搜索.
+        // 步骤2：以上一次的MBD 点为中心点,采用小菱形模板搜索,
+        // 计算各点的匹配误差,找到MBD 点.然后以MBD点为中心点,
+        // 采用小正方形模板搜索,得到的MBD点就是最优匹配点.
         case X264_ME_HEX: //六边形搜索
         {
     me_hex2:
@@ -472,7 +472,7 @@ void x264_me_search_ref( x264_t *h, x264_me_t *m, int16_t (*mvc)[2], int i_mvc, 
             // 计算另三个点为预测运动向量时的代价
             COST_MV_X3_DIR(  2,0,  1,-2, -1,-2, costs+4 ); /* +4 for 16-byte alignment */
             bcost <<= 3;
-            // 如果有代价更小的，替换原来的代价和相应的预测运动向量
+            // 如果有代价更小的,替换原来的代价和相应的预测运动向量
             COPY1_IF_LT( bcost, (costs[0]<<3)+2 );
             COPY1_IF_LT( bcost, (costs[1]<<3)+3 );
             COPY1_IF_LT( bcost, (costs[2]<<3)+4 );
@@ -482,7 +482,7 @@ void x264_me_search_ref( x264_t *h, x264_me_t *m, int16_t (*mvc)[2], int i_mvc, 
 
             if( bcost&7 )
             {
-                // bcost & 7 为真， 说明存在更小的预测运动向量
+                // bcost & 7 为真, 说明存在更小的预测运动向量
                 // 获取是哪个预测点
                 int dir = (bcost&7)-2;
                 // 将bmx, bmy 沿这个方向前进（移动）
@@ -493,7 +493,7 @@ void x264_me_search_ref( x264_t *h, x264_me_t *m, int16_t (*mvc)[2], int i_mvc, 
                 // 判断是否越界(超过搜索范围)
                 for( int i = (i_me_range>>1) - 1; i > 0 && CHECK_MVRANGE(bmx, bmy); i-- )
                 {
-                    // 仅仅对三个点进行预测求SAD代价，
+                    // 仅仅对三个点进行预测求SAD代价,
                     // 因为另外的三个点已经预测求SAD代价过了
                     COST_MV_X3_DIR( hex2[dir+0][0], hex2[dir+0][1],
                                     hex2[dir+1][0], hex2[dir+1][1],
@@ -513,7 +513,7 @@ void x264_me_search_ref( x264_t *h, x264_me_t *m, int16_t (*mvc)[2], int i_mvc, 
             }
             bcost >>= 3;
     #endif
-            // 菱（方）形搜索，进一步求精
+            // 菱（方）形搜索,进一步求精
             /* square refine */
             bcost <<= 4;
             COST_MV_X4_DIR(  0,-1,  0,1, -1,0, 1,0, costs );
@@ -532,12 +532,12 @@ void x264_me_search_ref( x264_t *h, x264_me_t *m, int16_t (*mvc)[2], int i_mvc, 
             break;
         }
         // （3）非对称十字型多层次六边形格点搜索算法（UMH）
-        // 该方法用到了下图所示的多个搜索模板，相对比较复杂，目前还没有仔细研究。记录一下步骤：
-        // 步骤0：进行一次小菱形搜索，根据匹配误差值和两个门限值（对于一种尺寸的宏块来说是固定大小的threshold1和threshold2）之间的关系作相应的处理，可能用到中菱形模板或者正八边形模板，也有可能直接跳到步骤1。
-        // 步骤1：使用非对称十字模板搜索。“非对称”的原因是一般水平方向运动要比垂直方向运动剧烈，所以将水平方向搜索范围定为W，垂直方向搜索范围定为W/2。
-        // 步骤2：使用5x5逐步搜索模板搜索。
-        // 步骤3：使用大六边形模板搜索。
-        // 步骤4：使用六边形搜索算法找到最优匹配点。
+        // 该方法用到了下图所示的多个搜索模板,相对比较复杂,目前还没有仔细研究.记录一下步骤：
+        // 步骤0：进行一次小菱形搜索,根据匹配误差值和两个门限值（对于一种尺寸的宏块来说是固定大小的threshold1和threshold2）之间的关系作相应的处理,可能用到中菱形模板或者正八边形模板,也有可能直接跳到步骤1.
+        // 步骤1：使用非对称十字模板搜索.“非对称”的原因是一般水平方向运动要比垂直方向运动剧烈,所以将水平方向搜索范围定为W,垂直方向搜索范围定为W/2.
+        // 步骤2：使用5x5逐步搜索模板搜索.
+        // 步骤3：使用大六边形模板搜索.
+        // 步骤4：使用六边形搜索算法找到最优匹配点.
         case X264_ME_UMH:
         {
             /* Uneven-cross Multi-Hexagon-grid Search
@@ -551,10 +551,10 @@ void x264_me_search_ref( x264_t *h, x264_me_t *m, int16_t (*mvc)[2], int i_mvc, 
             /* refine predictors */
             ucost1 = bcost;
            
-            // 以pmv为中心，取构成菱形的四个点进行预测求SAD，
-            // 如果有更小的，将替换bcost和bmx, bmy
+            // 以pmv为中心,取构成菱形的四个点进行预测求SAD,
+            // 如果有更小的,将替换bcost和bmx, bmy
             DIA1_ITER( pmx, pmy );
-            if( pmx | pmy ) // 以0向量为中心，取构成菱形的四个点预测
+            if( pmx | pmy ) // 以0向量为中心,取构成菱形的四个点预测
                 DIA1_ITER( 0, 0 );
 
             // 为什么？？？
@@ -562,12 +562,12 @@ void x264_me_search_ref( x264_t *h, x264_me_t *m, int16_t (*mvc)[2], int i_mvc, 
                 goto me_hex2;
 
             ucost2 = bcost;
-            // 如果bmx, bmy不是0向量， 且不等于pmv向量
-            // 搜索以bmx, bmy为中心构成菱形的四个点进行预测，
-            // 如果有更小的代价，则替换bcost和bmx, bmy
+            // 如果bmx, bmy不是0向量, 且不等于pmv向量
+            // 搜索以bmx, bmy为中心构成菱形的四个点进行预测,
+            // 如果有更小的代价,则替换bcost和bmx, bmy
             if( (bmx | bmy) && ((bmx-pmx) | (bmy-pmy)) )
                 DIA1_ITER( bmx, bmy );
-            // 如果上面的预测，没有预测到更佳的预测运动向量
+            // 如果上面的预测,没有预测到更佳的预测运动向量
             // 则将cross_start赋值为3
             if( bcost == ucost2 )
                 cross_start = 3;
@@ -580,35 +580,35 @@ void x264_me_search_ref( x264_t *h, x264_me_t *m, int16_t (*mvc)[2], int i_mvc, 
             if( bcost == ucost2 && SAD_THRESH(2000) )
             {
                 // 如果bcost == ucost2, 并且bcost小于某个阈值
-                // 以omx, omy为中心，对其周围的四个点进行预测
-                // 如果有更小的代价， 则替换bcost和bmx, bmy
+                // 以omx, omy为中心,对其周围的四个点进行预测
+                // 如果有更小的代价, 则替换bcost和bmx, bmy
                 COST_MV_X4( 0,-2, -1,-1, 1,-1, -2,0 );
-                // 以omx, omy为中心， 对其周围的另外四个点进行预测
-                // 如果有更小的代价，则替换bcost和bmx, bmy
+                // 以omx, omy为中心, 对其周围的另外四个点进行预测
+                // 如果有更小的代价,则替换bcost和bmx, bmy
                 COST_MV_X4( 2, 0, -1, 1, 1, 1,  0,2 );
-                // 如果bcost == ucost1，说明前面的预测都没有发现
-                // 代价更小的预测点，因此提前终止预测
+                // 如果bcost == ucost1,说明前面的预测都没有发现
+                // 代价更小的预测点,因此提前终止预测
                 if( bcost == ucost1 && SAD_THRESH(500) )
                     break;
-                // 如果bcost == ucost2，则继续预测
+                // 如果bcost == ucost2,则继续预测
                 if( bcost == ucost2 )
                 {
                     // 设定预测范围
                     int range = (i_me_range>>1) | 1;
-                    // x,y方向交叉预测omx, omy附近的点， 见CROSS
-                    // 如果有更小的代价，则替换bcost和bmx, bmy
+                    // x,y方向交叉预测omx, omy附近的点, 见CROSS
+                    // 如果有更小的代价,则替换bcost和bmx, bmy
                     CROSS( 3, range, range );
                     // 预测omx, omy为中心的下述四个点
-                    // 如果有更小的代价，则替换bcost和bmx, bmy
+                    // 如果有更小的代价,则替换bcost和bmx, bmy
                     COST_MV_X4( -1,-2, 1,-2, -2,-1, 2,-1 );
                     // 预测omx, omy为中心的下述另外四个点
-                    // 如果有更小的代价，则替换bcost和bmx, bmy
+                    // 如果有更小的代价,则替换bcost和bmx, bmy
                     COST_MV_X4( -2, 1, 2, 1, -1, 2, 1, 2 );
                     // 如果依然没有搜索到更佳的预测运动向量
                     // 则终止搜索
                     if( bcost == ucost2 )
                         break;
-                    // 如果有更佳的预测运动向量被搜索到，
+                    // 如果有更佳的预测运动向量被搜索到,
                     // 则设定新的cross_start
                     cross_start = range + 2;
                 }
@@ -654,7 +654,7 @@ void x264_me_search_ref( x264_t *h, x264_me_t *m, int16_t (*mvc)[2], int i_mvc, 
                     if( i_pixel != PIXEL_16x16 )
                     {
                         // 如果i_pixel不等于 0
-                        // 计算mvp，与mvc[0]两个向量的x,y方向
+                        // 计算mvp,与mvc[0]两个向量的x,y方向
                         // 的差的绝对值和
                         mvd = abs( m->mvp[0] - mvc[0][0] )
                             + abs( m->mvp[1] - mvc[0][1] );
@@ -669,22 +669,22 @@ void x264_me_search_ref( x264_t *h, x264_me_t *m, int16_t (*mvc)[2], int i_mvc, 
                 sad_ctx = SAD_THRESH(1000) ? 0
                         : SAD_THRESH(2000) ? 1
                         : SAD_THRESH(4000) ? 2 : 3;
-                // 根据上面计算的mvd及denom， 设定mvc_ctx
+                // 根据上面计算的mvd及denom, 设定mvc_ctx
                 mvd_ctx = mvd < 10*denom ? 0
                         : mvd < 20*denom ? 1
                         : mvd < 40*denom ? 2 : 3;
-                // 获取相应的搜索范围放大器， 更新搜索范围
+                // 获取相应的搜索范围放大器, 更新搜索范围
                 i_me_range = i_me_range * range_mul[mvd_ctx][sad_ctx] >> 2;
             }
 
             /* FIXME if the above DIA2/OCT2/CROSS found a new mv, it has not updated omx/omy.
              * we are still centered on the same place as the DIA2. is this desirable? */
-            // 在x, y方向交叉搜索， x方向的搜索范围i_me_range,
+            // 在x, y方向交叉搜索, x方向的搜索范围i_me_range,
             // y方向搜索范围i_me_range / 2
-            // 如果发现更佳的运动向量， 则替换bcost和bmx, bmy
+            // 如果发现更佳的运动向量, 则替换bcost和bmx, bmy
             CROSS( cross_start, i_me_range, i_me_range>>1 );
             // 预测以omx, omy为中心的下述四个点
-            // 如果发现更佳的运动向量，则替换bcost和bmx, bmy
+            // 如果发现更佳的运动向量,则替换bcost和bmx, bmy
             COST_MV_X4( -2,-2, -2,2, 2,-2, 2,2 );
 
             /* hexagon grid */
@@ -694,7 +694,7 @@ void x264_me_search_ref( x264_t *h, x264_me_t *m, int16_t (*mvc)[2], int i_mvc, 
             // 让p_cost_omx, p_cost_omvy
             // 指向p_cost_mvx, p_cost_mvy的某个偏移
         // a->p_cost_mv = h->cost_mv[a->i_qp] 见 x264_mb_analyse_load_costs
-        // h->cost_mv 初始化， 见 x264_analyse_init_costs
+        // h->cost_mv 初始化, 见 x264_analyse_init_costs
         // m->p_cost_mv = a->p_cost_mv 见宏定义 LOAD_FUNC
    
             const uint16_t *p_cost_omvx = p_cost_mvx + omx*4;
@@ -719,8 +719,8 @@ void x264_me_search_ref( x264_t *h, x264_me_t *m, int16_t (*mvc)[2], int i_mvc, 
                         int mx = omx + hex4[j][0]*i;
                         int my = omy + hex4[j][1]*i;
                         // 新的预测运动向量是否越界
-                        // 如果没有越界，则预测其代价
-                        // 如果代价更小，则替换bcost和bmx, bmy
+                        // 如果没有越界,则预测其代价
+                        // 如果代价更小,则替换bcost和bmx, bmy
                         if( CHECK_MVRANGE(mx, my) )
                             COST_MV( mx, my );
                     }
@@ -732,9 +732,9 @@ void x264_me_search_ref( x264_t *h, x264_me_t *m, int16_t (*mvc)[2], int i_mvc, 
                     pixel *pix_base = p_fref_w + omx + (omy-4*i)*stride;
                     int dy = i*stride;
 // h->pixf.fpelcmp_x4[0] = x264_pixel_sad_x4_16x16
-// 这个宏定义有点特别， 这种语法pix_base x0*i+(y0-2*k+4)*dy
+// 这个宏定义有点特别, 这种语法pix_base x0*i+(y0-2*k+4)*dy
 // 能表示pix_base的偏移 x0*i+(y0-2*k+4)*dy
-// 我自己写类似的语法，根本无法编译
+// 我自己写类似的语法,根本无法编译
 // 不知道 x264 如何做到
 #define SADS(k,x0,y0,x1,y1,x2,y2,x3,y3)\
                     h->pixf.fpelcmp_x4[i_pixel]( p_fenc,\
@@ -746,7 +746,7 @@ void x264_me_search_ref( x264_t *h, x264_me_t *m, int16_t (*mvc)[2], int i_mvc, 
                     pix_base += 2*dy;
 #define ADD_MVCOST(k,x,y) costs[k] += p_cost_omvx[x*4*i] + p_cost_omvy[y*4*i]
 #define MIN_MV(k,x,y)     COPY2_IF_LT( bcost, costs[k], dir, x*16+(y&15) )
-                    // 根据新的中心点， 预测其四个偏移点
+                    // 根据新的中心点, 预测其四个偏移点
                     // pix_base x0*i+(y0-2*k+4)*dy  等
                     // 其中 dy = i * stride; // stride在我的调试中=1344
                     // 并分别将预测代价保存在costs数组
@@ -774,7 +774,7 @@ void x264_me_search_ref( x264_t *h, x264_me_t *m, int16_t (*mvc)[2], int i_mvc, 
                     // #define MIN_MV(k,x,y)    
                     // COPY2_IF_LT( bcost, costs[k], dir, x*16+(y&15) )
                     // 判断该点的预测代价是否更优
-                    // 如果更佳，则替换bcost, 并将x, y进行复合
+                    // 如果更佳,则替换bcost, 并将x, y进行复合
                     // 赋值给dir
                     MIN_MV(  0, 0,-4 );
                     MIN_MV(  1, 0, 4 );
@@ -795,20 +795,20 @@ void x264_me_search_ref( x264_t *h, x264_me_t *m, int16_t (*mvc)[2], int i_mvc, 
 #undef SADS
 #undef ADD_MVCOST
 #undef MIN_MV
-                    // 如果dir不为0， 则说明前面的预测
+                    // 如果dir不为0, 则说明前面的预测
                     // 获得了更佳的预测运动向量
                     if(dir)
                     {
                         // 更新最佳预测运动向量
-                        // 为什么乘以i，暂时不是很清楚
+                        // 为什么乘以i,暂时不是很清楚
                         bmx = omx + i*(dir>>4);
                         bmy = omy + i*((dir<<28)>>28);
                     }
                 }
             } while( ++i <= i_me_range>>2 ); // i 是否越界
            
-            // 如果最佳预测运动向量没有越界，进行hex2预测
-            // 为什么没有越界，继续进行hex预测
+            // 如果最佳预测运动向量没有越界,进行hex2预测
+            // 为什么没有越界,继续进行hex预测
             // 而越界后终止
             if( bmy <= mv_y_max && bmy >= mv_y_min && bmx <= mv_x_max && bmx >= mv_x_min )
                 goto me_hex2;
@@ -816,7 +816,7 @@ void x264_me_search_ref( x264_t *h, x264_me_t *m, int16_t (*mvc)[2], int i_mvc, 
             // 终止预测
             break;
         }
-        // 该方法是一种全搜索算法，它对搜索区域内的点进行光栅式搜索，逐一计算并比较。
+        // 该方法是一种全搜索算法,它对搜索区域内的点进行光栅式搜索,逐一计算并比较.
         case X264_ME_ESA:
         case X264_ME_TESA:
         {
@@ -826,8 +826,8 @@ void x264_me_search_ref( x264_t *h, x264_me_t *m, int16_t (*mvc)[2], int i_mvc, 
             const int max_x = X264_MIN( bmx + i_me_range, mv_x_max );
             const int max_y = X264_MIN( bmy + i_me_range, mv_y_max );
            
-            // 获取 x 方向宽度，
-            // 除以4， 是否min_x, max_x 是 1/4像素坐标
+            // 获取 x 方向宽度,
+            // 除以4, 是否min_x, max_x 是 1/4像素坐标
             // 转换为整像素坐标 ？？？
             /* SEA is fastest in multiples of 4 */
             const int width = (max_x - min_x + 3) & ~3;
@@ -886,13 +886,13 @@ void x264_me_search_ref( x264_t *h, x264_me_t *m, int16_t (*mvc)[2], int i_mvc, 
        //              h->cost_mv_fpel[qp][j][i] = h->cost_mv[qp][i*4+j];
        //      }
        //  }
-       // 由上面的代码可知， h->cost_mv_fpel数组
+       // 由上面的代码可知, h->cost_mv_fpel数组
        // 在x264_analyse_init_costs被初始化
        // 因此 cost_fpel_mvx指向某个指针
-       // 从字面上看， 这块内存保存着整像素预设的预测向量？？？
+       // 从字面上看, 这块内存保存着整像素预设的预测向量？？？
             uint16_t *cost_fpel_mvx = h->cost_mv_fpel[h->mb.i_qp][-m->mvp[0]&3] + (-m->mvp[0]>>2);
 
-            // 在我的调试中 sad_size = 3， delta = 8
+            // 在我的调试中 sad_size = 3, delta = 8
             // h->pixf.sad_x4[3] = x264_pixel_sad_x4_8x8
             // SAD_X( 8x8 )将分别调x264_pixel_sad_8x8三次
             // 如果p_fenc指向的宏块假定为索引0
@@ -900,7 +900,7 @@ void x264_me_search_ref( x264_t *h, x264_me_t *m, int16_t (*mvc)[2], int i_mvc, 
             // p_fenc+delta表示其右宏块1
             // p_fenc + delta*FENC_STRIDE表示其底宏块2
             // p_fenc + delta + delta * FENC_STRIDE表示其底右宏块
-            // 也就是p_fenc将与其右， 底， 底右宏块
+            // 也就是p_fenc将与其右, 底, 底右宏块
             // 分别x26_pixel_sad_8x8求SAD
             // 将预测代价保存在enc_dc数组中
             h->pixf.sad_x4[sad_size]( (pixel*)x264_zero, p_fenc, p_fenc+delta,
@@ -911,7 +911,7 @@ void x264_me_search_ref( x264_t *h, x264_me_t *m, int16_t (*mvc)[2], int i_mvc, 
             // h->fenc->i_lines[0] + PADV*2 表示有多少行（包括padding lines）
             if( delta == 4 )
                 sums_base += stride * (h->fenc->i_lines[0] + PADV*2);
-            // 在我的调试中， i_pixel = 0(PIXEL_16x16)
+            // 在我的调试中, i_pixel = 0(PIXEL_16x16)
             // 因此 delta = 8 * 1344 = 10752
             if( i_pixel == PIXEL_16x16 || i_pixel == PIXEL_8x16 || i_pixel == PIXEL_4x8 )
                 delta *= stride;
@@ -928,7 +928,7 @@ void x264_me_search_ref( x264_t *h, x264_me_t *m, int16_t (*mvc)[2], int i_mvc, 
                
                 // h->pixf.sad[0] = x264_pixel_sad_16x16
                 // 计算p_fenc 与 参考Y平面在预测向量bmx, bmy为原点
-                // 的sad计算， 得到的SAD赋值给bsad
+                // 的sad计算, 得到的SAD赋值给bsad
                 int bsad = h->pixf.sad[i_pixel]( p_fenc, FENC_STRIDE, p_fref_w+bmy*stride+bmx, stride )
                          + BITS_MVD( bmx, bmy );
                 for( int my = min_y; my <= max_y; my++ )
@@ -936,7 +936,7 @@ void x264_me_search_ref( x264_t *h, x264_me_t *m, int16_t (*mvc)[2], int i_mvc, 
                     int i;
                     // 初始化y方向预测代价
                     int ycost = p_cost_mvy[my<<2];
-                    // 如果bsad小于这个初始化代价值，则进行下一个迭代
+                    // 如果bsad小于这个初始化代价值,则进行下一个迭代
                     if( bsad <= ycost )
                         continue;
                        
@@ -972,7 +972,7 @@ void x264_me_search_ref( x264_t *h, x264_me_t *m, int16_t (*mvc)[2], int i_mvc, 
                        
                         // h->pixf.sad_x3[0] = x264_pixel_sad_x3_16x16
                         // 求p_fenc分别于ref + xs[i], ref + xs[i+1], ref + xs[i+2]
-                        // 三个像素点为原点的预测代价，并保存在sads数组
+                        // 三个像素点为原点的预测代价,并保存在sads数组
                         h->pixf.sad_x3[i_pixel]( p_fenc, ref+xs[i], ref+xs[i+1], ref+xs[i+2], stride, sads );
                         for( int j = 0; j < 3; j++ )
                         {
@@ -1027,7 +1027,7 @@ void x264_me_search_ref( x264_t *h, x264_me_t *m, int16_t (*mvc)[2], int i_mvc, 
                     while( i < nmvsad && mvsads[i].sad <= sad_thresh )
                         i++;
 
-                    // 从i开始， 拷贝后面的sad, mv到[i]
+                    // 从i开始, 拷贝后面的sad, mv到[i]
                     // 这段代码的主要作用是将小于sad_thresh的
                     // sad 和 mv 保存在 mvsads[0], [1], ..., [i - 1]中
                     for( int j = i; j < nmvsad; j++ )
@@ -1048,9 +1048,9 @@ void x264_me_search_ref( x264_t *h, x264_me_t *m, int16_t (*mvc)[2], int i_mvc, 
                             CP32( mvsads[i].mv, mvsads[j].mv );
                             mvsads[i].sad = sad;
                         }
-                        // 第一遍迭代， i 保持不变，
+                        // 第一遍迭代, i 保持不变,
                         // 因为j = i, 这时 mvsads[i].sad > sad_thresh
-                        // 因为sad是uint32_t型，因此右边的取值只可能是0或1
+                        // 因为sad是uint32_t型,因此右边的取值只可能是0或1
                         i += (sad - (sad_thresh+1)) >> 31;
                     }
                     // 小于阈值的sad数目为i
@@ -1073,7 +1073,7 @@ void x264_me_search_ref( x264_t *h, x264_me_t *m, int16_t (*mvc)[2], int i_mvc, 
                 }
                 // 迭代在p_fenc 和 在以mvsads[i].mv[0], mvsads[i].mv[1]
                 // 为原点的参考帧的Y平面求sad
-                // 如果预测代价更小， 则替换bcost和bmx, bmy
+                // 如果预测代价更小, 则替换bcost和bmx, bmy
                 for( int i = 0; i < nmvsad; i++ )
                     COST_MV( mvsads[i].mv[0], mvsads[i].mv[1] );
             }
@@ -1126,7 +1126,7 @@ void x264_me_search_ref( x264_t *h, x264_me_t *m, int16_t (*mvc)[2], int i_mvc, 
           //     COPY3_IF_LT( bcost, costs[1], bmx, m1x, bmy, m1y );\
           //     COPY3_IF_LT( bcost, costs[2], bmx, m2x, bmy, m2y );\
           // }
-                    // 迭代预测三个点， 如果有更佳的候选者， 则替换bcost, bmx, bmy
+                    // 迭代预测三个点, 如果有更佳的候选者, 则替换bcost, bmx, bmy
                     for( i = 0; i < xn-2; i += 3 )
                         COST_MV_X3_ABS( min_x+xs[i],my, min_x+xs[i+1],my, min_x+xs[i+2],my );
                    
@@ -1134,7 +1134,7 @@ void x264_me_search_ref( x264_t *h, x264_me_t *m, int16_t (*mvc)[2], int i_mvc, 
                     bcost += ycost;
                     // 迭代计算在p_fenc和以min_x + xs[i], my为原点的参考帧
                     // Y平面之间的SAD
-                    // 如果有更佳的， 替换bcost和bmx, bmy
+                    // 如果有更佳的, 替换bcost和bmx, bmy
                     for( ; i < xn; i++ )
                         COST_MV( min_x+xs[i], my );
                 }
@@ -1172,7 +1172,7 @@ void x264_me_search_ref( x264_t *h, x264_me_t *m, int16_t (*mvc)[2], int i_mvc, 
     /* subpel refine */
     if( h->mb.i_subpel_refine >= 2 )
     {
-        // 子像素预测，进一步精化提炼
+        // 子像素预测,进一步精化提炼
         int hpel = subpel_iterations[h->mb.i_subpel_refine][2];
         int qpel = subpel_iterations[h->mb.i_subpel_refine][3];
         // 参见 refine_subpel 分析

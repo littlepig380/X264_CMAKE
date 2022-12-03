@@ -144,12 +144,12 @@ void x264_mb_predict_mv_16x16( x264_t *h, int i_list, int i_ref, int16_t mvp[2] 
     //!< 统计当前宏块所参考的参考帧序号与邻块所参考的参考帧序号相同数
     int i_count = (i_refa == i_ref) + (i_refb == i_ref) + (i_refc == i_ref);
 
-    if( i_count > 1 ) //!< 相同数大于1时，直接取这三个邻块的运动矢量的中值作为预测运动矢量
+    if( i_count > 1 ) //!< 相同数大于1时,直接取这三个邻块的运动矢量的中值作为预测运动矢量
     { 
 median:
         x264_median_mv( mvp, mv_a, mv_b, mv_c ); //取三个mv的中位数
     }
-    else if( i_count == 1 ) //!< 只有一个邻块与其相同时，预测运动矢量设置为该邻块的运动矢量
+    else if( i_count == 1 ) //!< 只有一个邻块与其相同时,预测运动矢量设置为该邻块的运动矢量
     {
         if( i_refa == i_ref )
             CP32( mvp, mv_a );
@@ -159,10 +159,10 @@ median:
             CP32( mvp, mv_c );
     }
     //!< 没有邻块与其相同的两种情况
-    else if( i_refb == -2 && i_refc == -2 && i_refa != -2 ) //!< 只有a块是存在的，则预测运动矢量设置为该邻块的运动矢量
+    else if( i_refb == -2 && i_refc == -2 && i_refa != -2 ) //!< 只有a块是存在的,则预测运动矢量设置为该邻块的运动矢量
         CP32( mvp, mv_a );
     else
-        goto median; //[question]!< b块和c块至少有一个是存在的，则取这三个邻块的运动矢量的中值作为预测运动矢量??
+        goto median; //[question]!< b块和c块至少有一个是存在的,则取这三个邻块的运动矢量的中值作为预测运动矢量??
 }
 
 
@@ -526,12 +526,12 @@ void x264_mb_predict_mv_ref16x16( x264_t *h, int i_list, int i_ref, int16_t (*mv
 {
     // mvr数据结构的意思
     // int16_t (*mvr[2][X264_REF_MAX*2])[2];/* 16x16 mv for each possible ref */
-    // mb.mvr 是一个指针数组， 指向一块int16_t[2]的数组
+    // mb.mvr 是一个指针数组, 指向一块int16_t[2]的数组
     // 数组的每一个item保存的是该索引对应的宏块的最佳预测运动向量
     // 因此mb.mvr保存的是每个参考list中每个参考帧每个16x16宏块的最佳预测运动向量
 
     // 语法备忘小注释for int16_t (*mvr)[2]
-    // 定义了一个指针a，指向一个具有2个int元素的数组
+    // 定义了一个指针a,指向一个具有2个int元素的数组
     // 使用方式：
     // int (*a)[2];
     // int p[2];
@@ -540,7 +540,7 @@ void x264_mb_predict_mv_ref16x16( x264_t *h, int i_list, int i_ref, int16_t (*mv
     int16_t (*mvr)[2] = h->mb.mvr[i_list][i_ref];
     int i = 0;
 
-// SET_MVP宏就是拷贝mvp到mvc数组，并将mvc索引增加1
+// SET_MVP宏就是拷贝mvp到mvc数组,并将mvc索引增加1
 #define SET_MVP(mvp) \
     { \
         CP32( mvc[i], mvp ); \

@@ -110,27 +110,62 @@ PIXEL_SSD_C( x264_pixel_ssd_4x4,    4,  4 )
 uint64_t x264_pixel_ssd_wxh( x264_pixel_function_t *pf, pixel *pix1, intptr_t i_pix1,
                              pixel *pix2, intptr_t i_pix2, int i_width, int i_height )
 {
+    //计算结果都累加到i_ssd变量上
     uint64_t i_ssd = 0;
     int y;
     int align = !(((intptr_t)pix1 | (intptr_t)pix2 | i_pix1 | i_pix2) & 15);
 
 #define SSD(size) i_ssd += pf->ssd[size]( pix1 + y*i_pix1 + x, i_pix1, \
                                           pix2 + y*i_pix2 + x, i_pix2 );
+
+    /*
+	 * SSD计算过程：
+	 * 从左上角开始,绝大部分块使用16x16的SSD计算
+	 * 右边边界部分可能用16x8的SSD计算
+	 * 下边边界可能用8x8的SSD计算
+	 * 注意：这么做主要是出于汇编优化的考虑
+	 *
+	 * +----+----+----+----+----+----+----+----+----+----+-+
+	 * |                   |                   |         |
+	 * +                   +                   +         +
+	 * |                   |                   |         |
+	 * +      16x16        +       16x16       +  8x16   +
+	 * |                   |                   |         |
+	 * +                   +                   +         +
+	 * |                   |                   |         |
+	 * +----+----+----+----+----+----+----+----+----+----+-+
+	 * |         |
+	 * +   8x8   +
+	 * |         |
+	 * +----+----+
+	 * +         +
+	 */
+
+    // 从源代码可以看出,x264_pixel_ssd_wxh()在计算大部分块的SSD的时候是以16x16的块为单位；
+    // 当宽度不是16的整数倍的时候,在左侧边缘处不足16像素的地方使用了8x16的块进行计算；
+    // 当高度不是16的整数倍的时候,在下方不足16像素的地方使用了8x8的块进行计算；
+    // 当宽高不是8的整数倍的时候,则再单独计算.
+
     for( y = 0; y < i_height-15; y += 16 )
     {
         int x = 0;
+        //大部分使用16x16的SSD
         if( align )
             for( ; x < i_width-15; x += 16 )
-                SSD(PIXEL_16x16);
+                SSD(PIXEL_16x16);        //i_ssd += pf->ssd[PIXEL_16x16]();
+        //右边边缘部分可能用8x16的SSD
         for( ; x < i_width-7; x += 8 )
-            SSD(PIXEL_8x16);
+            SSD(PIXEL_8x16);             //i_ssd += pf->ssd[PIXEL_8x16]();
     }
+    //下边边缘部分可能用到8x8的SSD
     if( y < i_height-7 )
         for( int x = 0; x < i_width-7; x += 8 )
-            SSD(PIXEL_8x8);
+            SSD(PIXEL_8x8);              //i_ssd += pf->ssd[PIXEL_8x8]();
 #undef SSD
 
 #define SSD1 { int d = pix1[y*i_pix1+x] - pix2[y*i_pix2+x]; i_ssd += d*d; }
+
+    //如果像素不是16/8的整数倍,边界上的点需要单独算
     if( i_width & 7 )
     {
         for( y = 0; y < (i_height & ~7); y++ )
@@ -685,31 +720,98 @@ static float ssim_end4( int sum0[5][4], int sum1[5][4], int width )
     return ssim;
 }
 
+/*
+ * 计算SSIM
+ * pix1: 受损数据
+ * pix2: 原始数据
+ * i_width: 图像宽
+ * i_height: 图像高
+ */
 float x264_pixel_ssim_wxh( x264_pixel_function_t *pf,
                            pixel *pix1, intptr_t stride1,
                            pixel *pix2, intptr_t stride2,
                            int width, int height, void *buf, int *cnt )
 {
+	/*
+	 * SSIM公式
+	 * SSIM = ((2*ux*uy+C1)(2*σxy+C2))/((ux^2+uy^2+C1)(σx^2+σy^2+C2))
+	 *
+	 * 其中
+	 * ux=E(x)
+	 * uy=E(y)
+	 * σxy=cov(x,y)=E(XY)-ux*uy
+	 * σx^2=E(x^2)-E(x)^2
+	 *
+	 */
     int z = 0;
     float ssim = 0.0;
+    //这是数组指针,注意和指针数组的区别
+    //数组指针就是指向数组的指针
     int (*sum0)[4] = buf;
+    /*
+     * sum0是一个数组指针,其中存储了一个4元素数组的地址
+     * 换句话说,sum0[]中每一个元素对应一个4x4块的信息（该信息包含4个元素）.
+     *
+     * 4个元素中：
+	 * [0]原始像素之和
+	 * [1]受损像素之和
+	 * [2]原始像素平方之和+受损像素平方之和
+	 * [3]原始像素*受损像素的值的和
+	 *
+     */
     int (*sum1)[4] = sum0 + (width >> 2) + 3;
+    //除以4,编程以“4x4块”为单位
     width >>= 2;
     height >>= 2;
+    //以8*8的块为单位计算SSIM值.然后以4个像素为step滑动窗口
     for( int y = 1; y < height; y++ )
     {
+    	//下面这个循环,只有在第一次执行的时候执行2次,处理第1行和第2行的块
+    	//后面的都只会执行一次
         for( ; z <= y; z++ )
         {
+        	//执行完XCHG()之后,sum1[]存储上1行块的值（在上面）,而sum0[]等待ssim_4x4x2_core()计算当前行的值（在下面）
             XCHG( void*, sum0, sum1 );
+            //获取4x4块的信息（这里并没有代入公式计算SSIM结果）
+            //结果存储在sum0[]中.从左到右每个4x4的块依次存储在sum0[0],sum0[1],sum0[2]...
+            //每次x前进2个块
+            /*
+			 * ssim_4x4x2_core()：计算2个4x4块
+			 * +----+----+
+			 * |    |    |
+			 * +----+----+
+			 */
             for( int x = 0; x < width; x+=2 )
                 pf->ssim_4x4x2_core( &pix1[4*(x+z*stride1)], stride1, &pix2[4*(x+z*stride2)], stride2, &sum0[x] );
         }
+        //x每次增加4,前进4个块
+        //以8*8的块为单位计算
+        /*
+         * sum1[]为上一行4x4块信息,sum0[]为当前行4x4块信息
+         * 示例（line以4x4块为单位）
+         * 第1次运行
+		 *       +----+----+----+----+
+		 * 1line |   sum1[]
+		 *       +----+----+----+----+
+		 * 2line |   sum0[]
+		 *       +----+----+----+----+
+		 *
+         * 第2次运行
+         *       +
+         * 1line |
+		 *       +----+----+----+----+
+		 * 2line |   sum1[]
+		 *       +----+----+----+----+
+		 * 3line |   sum0[]
+		 *       +----+----+----+----+
+         */
         for( int x = 0; x < width-1; x += 4 )
-            ssim += pf->ssim_end4( sum0+x, sum1+x, X264_MIN(4,width-x-1) );
+            ssim += pf->ssim_end4( sum0+x, sum1+x, X264_MIN(4,width-x-1) );//累加
     }
     *cnt = (height-1) * (width-1);
     return ssim;
 }
+
 
 static int pixel_vsad( pixel *src, intptr_t stride, int height )
 {
